@@ -1,0 +1,48 @@
+---
+/**
+ * {components.feature-card} — elevation level 1 in DESIGN.md: {colors.surface-1}
+ * on the canvas with a 1px hairline and {rounded.lg} 12px. Flat. Depth in this
+ * system is the surface ladder, never a shadow.
+ *
+ * `panel` steps to {rounded.xl} 16px for the full-width content panel
+ * ({components.product-screenshot-card}) — a radius change, nothing else.
+ */
+import type { HTMLAttributes } from "astro/types";
+
+interface Props extends HTMLAttributes<"div"> {
+  href?: string;
+  padding?: "none" | "sm" | "md" | "lg";
+  /** Adds the sticky-panel shadow. Purchase rails and checkout summaries only. */
+  elevated?: boolean;
+  /** 16px panel rounding instead of the 12px card default. */
+  panel?: boolean;
+}
+
+const {
+  href,
+  padding = "md",
+  elevated = false,
+  panel = false,
+  class: className,
+  ...rest
+} = Astro.props;
+
+// Card interior padding is {spacing.lg} 24px; dense tiles compress to 16px.
+const paddings = { none: "", sm: "p-4", md: "p-5", lg: "p-6" };
+
+const classes = [
+  "block bg-elevated border border-hairline-soft",
+  panel ? "rounded-xl" : "rounded-lg",
+  paddings[padding],
+  elevated && "shadow-panel",
+  // Hover lifts to surface-2 + the stronger hairline — elevation level 2.
+  href && "transition-colors duration-150 hover:bg-soft hover:border-hairline",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const Tag = href ? "a" : "div";
+---
+
+<Tag class={classes} href={href} {...rest}><slot /></Tag>

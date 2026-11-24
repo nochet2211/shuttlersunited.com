@@ -1,0 +1,131 @@
+---
+/**
+ * One match in a bracket column: two sides, seeds, game score, and the loser
+ * dimmed. The winner is bold rather than coloured, so a draw sheet still reads
+ * correctly in greyscale or for anyone who can't rely on hue.
+ */
+import { gamesWon, scoreLine, winnerOf } from "../../lib/tournament";
+import { shortDate } from "../../lib/format";
+import type { Match } from "../../lib/types";
+
+interface Props {
+  match: Match;
+}
+
+const { match } = Astro.props;
+
+const winner = winnerOf(match);
+const [gamesA, gamesB] = gamesWon(match);
+const detail = scoreLine(match);
+
+const sides = [
+  {
+    key: "a" as const,
+    name: match.side_a_name,
+    seed: match.side_a_seed,
+    slug: match.expand?.side_a_member?.slug,
+    isPublic: match.expand?.side_a_member?.is_public,
+    games: gamesA,
+  },
+  {
+    key: "b" as const,
+    name: match.side_b_name,
+    seed: match.side_b_seed,
+    slug: match.expand?.side_b_member?.slug,
+    isPublic: match.expand?.side_b_member?.is_public,
+    games: gamesB,
+  },
+];
+
+const played =
+  match.status === "completed" ||
+  match.status === "walkover" ||
+  match.status === "retired";
+---
+
+<div class="overflow-hidden rounded-lg border border-hairline-soft bg-elevated">
+  {
+    sides.map((side, index) => {
+      const isWinner = winner === side.key;
+      const isLoser = winner !== null && !isWinner;
+      return (
+        <div
+          class:list={[
+            "flex items-center gap-2 px-3 py-2",
+            index === 0 && "border-b border-hairline-soft",
+            isWinner && "bg-soft",
+          ]}
+        >
+          {side.seed ? (
+            <span class="w-5 shrink-0 text-[12px] leading-4 text-faint">
+              {side.seed}
+            </span>
+          ) : (
+            <span class="w-5 shrink-0" />
+          )}
+
+          {side.slug && side.isPublic ? (
+            <a
+              href={`/players/${side.slug}`}
+              class:list={[
+                "min-w-0 flex-1 truncate text-[14px] leading-5 hover:underline",
+                isWinner
+                  ? "font-medium text-ink"
+                  : isLoser
+                    ? "text-mute"
+                    : "text-body",
+              ]}
+            >
+              {side.name}
+            </a>
+          ) : (
+            <span
+              class:list={[
+                "min-w-0 flex-1 truncate text-[14px] leading-5",
+                isWinner
+                  ? "font-medium text-ink"
+                  : isLoser
+                    ? "text-mute"
+                    : "text-body",
+              ]}
+            >
+              {side.name}
+            </span>
+          )}
+
+          {played && (
+            <span
+              class:list={[
+                "shrink-0 text-[14px] leading-5 tabular-nums",
+                isWinner ? "font-medium text-ink" : "text-mute",
+              ]}
+            >
+              {side.games}
+            </span>
+          )}
+        </div>
+      );
+    })
+  }
+
+  {
+    (detail || match.status === "live" || match.scheduled_at) && (
+      <div class="flex items-center justify-between gap-2 border-t border-hairline-soft bg-soft px-3 py-2">
+        <span class="truncate text-[12px] leading-4 text-faint">
+          {detail || (match.scheduled_at ? shortDate(match.scheduled_at) : "")}
+          {match.court ? ` · ${match.court}` : ""}
+        </span>
+        {match.status === "live" && (
+          <span class="shrink-0 tracking-[0.06em] text-[12px] uppercase leading-4 text-error">
+            Live
+          </span>
+        )}
+        {match.status === "retired" && (
+          <span class="shrink-0 tracking-[0.06em] text-[12px] uppercase leading-4 text-faint">
+            Ret.
+          </span>
+        )}
+      </div>
+    )
+  }
+</div>

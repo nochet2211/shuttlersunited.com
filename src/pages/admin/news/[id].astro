@@ -1,0 +1,80 @@
+---
+import AppLayout from "../../../layouts/AppLayout.astro";
+import Card from "../../../components/ui/Card.astro";
+import Alert from "../../../components/ui/Alert.astro";
+import Badge from "../../../components/ui/Badge.astro";
+import Button from "../../../components/ui/Button.astro";
+import StoryForm from "../../../components/news/StoryForm.astro";
+import { actions } from "astro:actions";
+import { getAdminClient, isNotFound } from "../../../lib/pocketbase";
+import { listTournaments } from "../../../lib/queries";
+import { actionMessage } from "../../../lib/action-error";
+import { postCover } from "../../../lib/news";
+import type { Post } from "../../../lib/types";
+
+const result = Astro.getActionResult(actions.news.updatePost);
+
+if (result && !result.error) {
+  return Astro.redirect("/admin/news");
+}
+
+const { id } = Astro.params;
+
+let post: Post | null = null;
+try {
+  const pb = await getAdminClient();
+  post = await pb.collection("posts").getOne<Post>(id!);
+} catch (error) {
+  if (!isNotFound(error)) throw error;
+}
+
+if (!post) {
+  return new Response("Not found", { status: 404 });
+}
+
+const tournaments = await listTournaments();
+const cover = postCover(post, "400x200");
+const error = actionMessage(result?.error);
+---
+
+<AppLayout
+  section="admin"
+  title="Edit story"
+  eyebrow="Newsroom"
+  heading={post.title}
+  description={`/news/${post.slug}`}
+>
+  <div class="flex flex-col gap-5">
+    {error && <Alert>{error}</Alert>}
+
+    <div class="flex flex-wrap items-center gap-2">
+      <Badge tone={post.status === "published" ? "success" : "neutral"}>
+        {post.status === "published" ? "Live" : "Draft"}
+      </Badge>
+      {post.is_pinned && <Badge tone="ink">Pinned</Badge>}
+      {
+        post.status === "published" && (
+          <Button href={`/news/${post.slug}`} variant="ghost" size="sm">
+            View on the site →
+          </Button>
+        )
+      }
+    </div>
+
+    {
+      cover && (
+        <img
+          src={cover}
+          alt=""
+          width="400"
+          height="200"
+          class="aspect-[2/1] w-48 rounded-md border border-hairline-soft object-cover"
+        />
+      )
+    }
+
+    <Card padding="lg">
+      <StoryForm mode="edit" post={post} tournaments={tournaments} />
+    </Card>
+  </div>
+</AppLayout>

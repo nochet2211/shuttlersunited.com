@@ -1,0 +1,84 @@
+---
+/**
+ * {components.button-*} from DESIGN.md. Every button is {rounded.md} 8px with
+ * a 14px/500 label and 8px/14px padding — DESIGN.md's "Don't" list rules out
+ * pill-rounded CTAs outright, so a pill here is the bug.
+ *
+ * Two fills carry the weight:
+ * primary — {components.button-inverse}, the ink CTA. Inverts with the theme
+ * and does the marketing work.
+ * buy     — {components.button-primary}, the lavender CTA. Lavender is
+ * scarce: money and commitment only (dues, checkout, confirming a
+ * booking). If it appears on a page with no payment on it, that's
+ * the bug.
+ */
+import type { HTMLAttributes } from "astro/types";
+
+interface Props extends Omit<HTMLAttributes<"a">, "type"> {
+  variant?: "primary" | "buy" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md" | "lg";
+  href?: string;
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
+  full?: boolean;
+}
+
+const {
+  variant = "primary",
+  size = "md",
+  href,
+  type = "button",
+  disabled = false,
+  full = false,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const base =
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent text-[14px] font-medium leading-none whitespace-nowrap transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none";
+
+// The spec's padding is 8px/14px. DESIGN.md's touch rules floor a CTA at 40px
+// and grow it to 44px on a coarse pointer, so every size carries a
+// pointer-coarse bump rather than shipping a 32px tap target to a phone.
+const sizes = {
+  sm: "h-9 px-3 pointer-coarse:h-10",
+  md: "h-10 px-3.5 pointer-coarse:h-11",
+  lg: "h-11 px-5 pointer-coarse:h-12",
+};
+
+const variants = {
+  // {components.button-inverse}
+  primary: "bg-ink text-on-ink hover:bg-ink/85",
+  // {components.button-primary} → hover shifts to {colors.primary-hover}
+  buy: "bg-primary text-on-primary hover:bg-primary-deep",
+  // {components.button-secondary} — surface-1 fill, 1px hairline. Not an
+  // outline-only ghost: Linear lifts the secondary onto a surface instead.
+  secondary: "bg-elevated text-ink border-hairline hover:bg-soft",
+  // {components.button-tertiary} — plain text button on the canvas.
+  ghost: "bg-transparent text-mute hover:bg-soft hover:text-ink",
+  danger: "bg-error text-on-error-fill hover:bg-error-strong",
+};
+
+const classes = [
+  base,
+  sizes[size],
+  variants[variant],
+  full && "w-full",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const Tag = href ? "a" : "button";
+---
+
+<Tag
+  class={classes}
+  href={href}
+  type={href ? undefined : type}
+  disabled={href ? undefined : disabled}
+  aria-disabled={href && disabled ? "true" : undefined}
+  {...rest}
+>
+  <slot />
+</Tag>

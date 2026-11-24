@@ -1,0 +1,210 @@
+---
+/**
+ * A single story. Bodies are plain text parsed into blocks (see
+ * lib/news.ts) — no markdown dependency and no raw HTML, so nothing an editor
+ * types can inject markup into the page.
+ */
+import Layout from "../../layouts/Layout.astro";
+import Card from "../../components/ui/Card.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Button from "../../components/ui/Button.astro";
+import Avatar from "../../components/ui/Avatar.astro";
+import PostCard from "../../components/news/PostCard.astro";
+import { getPostBySlug, listPosts } from "../../lib/queries";
+import {
+  categoryLabel,
+  postCover,
+  renderPostBody,
+  readingMinutes,
+} from "../../lib/news";
+import { memberAvatar } from "../../lib/files";
+import { dateRange, fixtureTiming } from "../../lib/news";
+import { shortDate } from "../../lib/format";
+
+const { slug } = Astro.params;
+const post = slug ? await getPostBySlug(slug) : null;
+
+if (!post) {
+  return new Response("Not found", { status: 404 });
+}
+
+const [more] = await Promise.all([listPosts({ limit: 3, exclude: post.id })]);
+
+const cover = postCover(post, "1600x800");
+const blocks = renderPostBody(post.body);
+const author = post.expand?.author;
+const fixture = post.expand?.tournament;
+---
+
+<Layout title={post.title} description={post.summary}>
+  <article class="shell flex flex-col gap-8">
+    {/* --------------------------------------------------------- headline */}
+    <header class="flex max-w-3xl flex-col gap-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <a href={`/?category=${post.category}`}>
+          <Badge>{categoryLabel(post.category)}</Badge>
+        </a>
+        <time
+          datetime={post.published_at}
+          class="text-[13px] leading-5 text-faint"
+        >
+          {shortDate(post.published_at)}
+        </time>
+        <span class="text-[13px] leading-5 text-faint">
+          · {readingMinutes(post)} min read
+        </span>
+      </div>
+
+      <h1 class="display-lg text-ink">{post.title}</h1>
+
+      <p class="subtitle-lg text-body">{post.summary}</p>
+
+      {
+        author && (
+          <div class="flex items-center gap-2.5 pt-1">
+            <Avatar
+              name={author.name}
+              src={memberAvatar(author, "100x100")}
+              size="sm"
+            />
+            <span class="text-[14px] leading-5 text-mute">
+              By{" "}
+              <a
+                href={`/players/${author.slug}`}
+                class="font-medium text-ink hover:underline"
+              >
+                {author.name}
+              </a>
+            </span>
+          </div>
+        )
+      }
+    </header>
+
+    {
+      cover && (
+        <img
+          src={cover}
+          alt=""
+          width="1600"
+          height="800"
+          class="aspect-[2/1] w-full rounded-xl border border-hairline-soft object-cover"
+        />
+      )
+    }
+
+    {/* ------------------------------------------------------------- body */}
+    <div
+      class="grid gap-10 pb-16 lg:grid-cols-[minmax(0,680px)_300px] md:pb-20"
+    >
+      <div class="flex min-w-0 flex-col gap-5">
+        {
+          blocks.map((block) =>
+            block.kind === "heading" ? (
+              <h2 class="heading-md pt-3 text-ink">{block.text}</h2>
+            ) : block.kind === "list" ? (
+              <ul class="flex list-disc flex-col gap-2 pl-5 marker:text-faint">
+                {block.items.map((item) => (
+                  <li class="text-[16px] leading-[1.6] text-body">{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p class="text-[16px] leading-[1.6] text-body">{block.text}</p>
+            ),
+          )
+        }
+
+        {
+          /* A governing-body item is somebody else's notice. Crediting and
+             linking the original is the honest way to carry it. */
+          post.source_url || post.source_name ? (
+            <Card padding="md" class="mt-2">
+              <div class="flex flex-col gap-1.5">
+                <p class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                  Source
+                </p>
+                {post.source_url ? (
+                  <a
+                    href={post.source_url}
+                    rel="noopener noreferrer nofollow"
+                    target="_blank"
+                    class="text-[16px] font-medium leading-[1.5] text-link hover:text-link-deep"
+                  >
+                    {post.source_name ?? post.source_url} ↗
+                  </a>
+                ) : (
+                  <p class="text-[16px] leading-[1.5] text-ink">
+                    {post.source_name}
+                  </p>
+                )}
+                <p class="text-[13px] leading-5 text-faint">
+                  Published elsewhere and summarised here. Check the original
+                  before you rely on it.
+                </p>
+              </div>
+            </Card>
+          ) : null
+        }
+      </div>
+
+      {/* ------------------------------------------------------- aside */}
+      <aside class="flex min-w-0 flex-col gap-5">
+        {
+          fixture && (
+            <Card padding="md">
+              <div class="flex flex-col gap-2">
+                <p class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                  The fixture
+                </p>
+                <a
+                  href={`/tournaments/${fixture.slug}`}
+                  class="text-[16px] font-medium leading-[1.4] text-ink hover:underline"
+                >
+                  {fixture.name}
+                </a>
+                <p class="text-[13px] leading-5 text-faint">
+                  {fixtureTiming(fixture.start_date, fixture.end_date)} ·{" "}
+                  {dateRange(fixture.start_date, fixture.end_date)}
+                </p>
+                {[fixture.venue, fixture.city].filter(Boolean).length > 0 && (
+                  <p class="text-[13px] leading-5 text-faint">
+                    {[fixture.venue, fixture.city].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+                <Button
+                  href={`/tournaments/${fixture.slug}`}
+                  variant="secondary"
+                  size="sm"
+                  class="mt-1 self-start"
+                >
+                  Draw & results
+                </Button>
+              </div>
+            </Card>
+          )
+        }
+
+        {
+          more.length > 0 && (
+            <Card padding="none">
+              <div class="border-b border-hairline-soft px-4 py-3">
+                <h2 class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                  More news
+                </h2>
+              </div>
+              <div class="flex flex-col gap-1 p-2">
+                {more.map((item) => (
+                  <PostCard post={item} variant="compact" />
+                ))}
+              </div>
+            </Card>
+          )
+        }
+
+        <Button href="/" variant="ghost" size="sm" class="self-start">
+          ← All news
+        </Button>
+      </aside>
+    </div>
+  </article>
+</Layout>

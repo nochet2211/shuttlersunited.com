@@ -1,0 +1,25 @@
+---
+interface Props {
+  tone?: "error" | "success" | "warning";
+  class?: string;
+}
+const { tone = "error", class: className } = Astro.props;
+
+// Soft tints, not saturated fills — the saturated versions belong to badges.
+const tones = {
+  error: "border-error/30 bg-error/10 text-error-deep",
+  success: "border-success/30 bg-success-soft text-success-deep",
+  warning: "border-warning/40 bg-warning-soft text-warning-deep",
+};
+---
+
+<div
+  role={tone === "error" ? "alert" : "status"}
+  class:list={[
+    "rounded-md border px-3 py-2.5 text-[14px] leading-[1.5]",
+    tones[tone],
+    className,
+  ]}
+>
+  <slot />
+</div>

@@ -1,0 +1,237 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Card from "../../components/ui/Card.astro";
+import Button from "../../components/ui/Button.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Eyebrow from "../../components/ui/Eyebrow.astro";
+import { listPlans } from "../../lib/queries";
+import { money } from "../../lib/format";
+
+const plans = await listPlans();
+const member = Astro.locals.member;
+
+// The middle tier is the one to steer people toward when there are three.
+const featuredIndex = plans.length >= 3 ? 1 : 0;
+
+const intervalLabel: Record<string, string> = {
+  monthly: "/month",
+  quarterly: "/quarter",
+  annual: "/year",
+};
+
+const faqs = [
+  {
+    q: "How do I pay?",
+    a: "UPI, card, netbanking or wallet through Razorpay. Your receipt is generated instantly and every payment stays on your dashboard.",
+  },
+  {
+    q: "Can I pay in cash?",
+    a: "Yes. A club admin records it against your account, and it shows in your history exactly like an online payment.",
+  },
+  {
+    q: "What if I miss a month?",
+    a: "Nothing is auto-charged. Your dashboard shows what is outstanding and you settle it whenever you like.",
+  },
+  {
+    q: "Do I need a password?",
+    a: "No. You log in with a 6-digit code sent to your WhatsApp, so there is nothing to forget or leak.",
+  },
+];
+---
+
+<Layout
+  title="Membership"
+  description="Join Shuttlers United — monthly, quarterly and annual membership plans with court access, coaching drills and tournament entry."
+>
+  <div class="shell">
+    <header
+      class="flex flex-col items-center gap-3 border-b border-hairline-soft pb-12 text-center"
+    >
+      <Eyebrow>Membership</Eyebrow>
+      <h1 class="display-lg max-w-2xl text-ink">
+        Pick a plan, play all season.
+      </h1>
+      <p class="subtitle-md max-w-lg text-body">
+        Every plan includes court access six days a week, club tournament entry,
+        and a profile on the roster.
+      </p>
+    </header>
+
+    {
+      plans.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-[14px] leading-5 text-mute">
+            Plans aren't published yet. Please check back shortly.
+          </p>
+        </div>
+      ) : (
+        <div class="grid gap-4 py-12 md:grid-cols-3">
+          {plans.map((plan, index) => {
+            const featured = index === featuredIndex;
+            return (
+              <div
+                class:list={[
+                  "relative flex flex-col rounded-lg border-2 bg-elevated p-8",
+                  featured ? "border-primary" : "border-hairline-soft",
+                ]}
+              >
+                {featured && (
+                  <Badge tone="warning" class="absolute -top-3 left-8">
+                    Most popular
+                  </Badge>
+                )}
+
+                <div class="flex flex-col gap-1">
+                  <h2 class="heading-md">{plan.name}</h2>
+                  {plan.description && (
+                    <p class="text-[14px] leading-5 text-mute">
+                      {plan.description}
+                    </p>
+                  )}
+                </div>
+
+                <p class="mt-6 flex items-baseline gap-1">
+                  <span class="display-lg text-ink">{money(plan.amount)}</span>
+                  <span class="text-[14px] leading-5 text-mute">
+                    {intervalLabel[plan.interval] ?? ""}
+                  </span>
+                </p>
+
+                {Array.isArray(plan.benefits) && plan.benefits.length > 0 && (
+                  <ul class="mt-6 flex flex-1 flex-col gap-2.5">
+                    {plan.benefits.map((benefit) => (
+                      <li class="flex items-start gap-2 text-[14px] leading-5 text-body">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.75"
+                          aria-hidden="true"
+                          class="mt-0.5 shrink-0 text-ink"
+                        >
+                          <path
+                            d="m3.5 8.5 3 3 6-7"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                        {benefit}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <Button
+                  href={member ? "/dashboard" : "/login"}
+                  variant={featured ? "buy" : "secondary"}
+                  class="mt-8"
+                  full
+                >
+                  {member ? "Go to dashboard" : "Get started"}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )
+    }
+
+    {
+      /* ------------------------------------------------------------- how it works */
+    }
+    <section class="border-t border-hairline-soft py-16">
+      <div class="mb-8 flex flex-col gap-2">
+        <Eyebrow>Getting in</Eyebrow>
+        <h2 class="heading-lg">Three steps, about a minute</h2>
+      </div>
+
+      <ol class="grid gap-4 md:grid-cols-3">
+        {
+          [
+            {
+              n: "01",
+              title: "Verify your number",
+              body: "Enter your mobile number and type back the 6-digit code we send on WhatsApp.",
+            },
+            {
+              n: "02",
+              title: "Fill in your profile",
+              body: "Name, playing level, and the events you like. You can add gear and photos later.",
+            },
+            {
+              n: "03",
+              title: "Pay your first dues",
+              body: "Settle the current month with UPI or card, and you are on the roster.",
+            },
+          ].map((step) => (
+            <Card padding="lg">
+              <div class="flex flex-col gap-2">
+                <span class="text-[12px] leading-4 text-faint">{step.n}</span>
+                <h3 class="heading-md">{step.title}</h3>
+                <p class="text-[14px] leading-5 text-body">{step.body}</p>
+              </div>
+            </Card>
+          ))
+        }
+      </ol>
+    </section>
+
+    {
+      /* --------------------------------------------------------------------- faq */
+    }
+    <section class="border-t border-hairline-soft py-16">
+      <div class="mb-8 flex flex-col gap-2">
+        <Eyebrow>Questions</Eyebrow>
+        <h2 class="heading-lg">Before you join</h2>
+      </div>
+
+      {
+        /* faq-accordion: one card per item, question in subtitle-lg with the
+ chevron on the right, answer dropping in below on expand. */
+      }
+      <div class="flex flex-col gap-3">
+        {
+          faqs.map((faq) => (
+            <details class="card group p-6 [&_summary::-webkit-details-marker]:hidden">
+              <summary class="flex min-h-10 cursor-pointer list-none items-center justify-between gap-4 pointer-coarse:min-h-11">
+                <span class="subtitle-lg text-ink">{faq.q}</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  aria-hidden="true"
+                  class="shrink-0 text-mute transition-transform duration-300 group-open:rotate-180"
+                >
+                  <path
+                    d="m5 7.5 5 5 5-5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <p class="pt-4 text-[16px] leading-[1.5] text-body">{faq.a}</p>
+            </details>
+          ))
+        }
+      </div>
+    </section>
+
+    <section
+      class="flex flex-col items-center gap-5 border-t border-hairline-soft py-20 text-center"
+    >
+      <h2 class="display-lg max-w-xl text-ink">Ready when you are.</h2>
+      <Button
+        href={member ? "/dashboard" : "/login"}
+        variant="primary"
+        size="lg"
+      >
+        {member ? "Go to dashboard" : "Join Shuttlers United"}
+      </Button>
+    </section>
+  </div>
+</Layout>

@@ -1,0 +1,234 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Eyebrow from "../../components/ui/Eyebrow.astro";
+import Empty from "../../components/ui/Empty.astro";
+import { listTournaments, tournamentSummaries } from "../../lib/queries";
+import { money, shortDate } from "../../lib/format";
+import type { Tournament, TournamentResult } from "../../lib/types";
+
+const [all, summaries] = await Promise.all([
+  listTournaments(),
+  tournamentSummaries(),
+]);
+
+const upcoming = all
+  .filter((event) => event.status === "upcoming" || event.status === "ongoing")
+  .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+// Most recent first — a results list reads backwards from now.
+const past = all
+  .filter((event) => event.status === "completed")
+  .sort((a, b) => b.start_date.localeCompare(a.start_date));
+
+const dateRange = (event: Tournament) =>
+  event.end_date &&
+  event.end_date.slice(0, 10) !== event.start_date.slice(0, 10)
+    ? `${shortDate(event.start_date)} – ${shortDate(event.end_date)}`
+    : shortDate(event.start_date);
+
+const RESULT_LABELS: Record<TournamentResult, string> = {
+  winner: "Winner",
+  "runner-up": "Runner-up",
+  "semi-final": "Semi-finalist",
+  "quarter-final": "Quarter-finalist",
+  "round-of-16": "Round of 16",
+  "group-stage": "Group stage",
+  participated: "Participated",
+};
+
+const resultTone = (result: TournamentResult) =>
+  result === "winner" ? "ink" : result === "runner-up" ? "accent" : "neutral";
+
+// A tier column only earns its place once the calendar actually varies.
+const levelTone = (level: Tournament["level"]) =>
+  level === "national" || level === "state" ? "ink" : "neutral";
+
+const panels = [
+  {
+    id: "upcoming",
+    label: "Upcoming",
+    events: upcoming,
+    emptyTitle: "Nothing scheduled",
+  },
+  { id: "past", label: "Past", events: past, emptyTitle: "No results yet" },
+];
+---
+
+<Layout
+  title="Tournaments"
+  description="Fixtures and results for Shuttlers United — club championships, district opens and invitationals."
+>
+  <div class="shell">
+    <header class="flex flex-col gap-2 border-b border-hairline-soft pb-8">
+      <Eyebrow>Fixtures & results</Eyebrow>
+      <h1 class="heading-lg">Tournaments</h1>
+      <p class="subtitle-md max-w-xl text-body">
+        Everything the club has entered, and everything still to come. Open an
+        event for the full draw, group tables and prize breakdown.
+      </p>
+    </header>
+
+    <div
+      class="flex gap-2 border-b border-hairline-soft py-4"
+      role="tablist"
+      aria-label="Tournament status"
+    >
+      {
+        panels.map((panel, index) => (
+          <button
+            type="button"
+            role="tab"
+            id={`tab-${panel.id}`}
+            aria-controls={`panel-${panel.id}`}
+            aria-selected={index === 0 ? "true" : "false"}
+            class:list={[
+              "tab rounded-full px-3 py-1.5 text-[14px] pointer-coarse:py-2.5 leading-5 transition-colors",
+              index === 0
+                ? "bg-lift font-medium text-ink"
+                : "text-mute hover:bg-soft hover:text-ink",
+            ]}
+          >
+            {panel.label} ({panel.events.length})
+          </button>
+        ))
+      }
+    </div>
+
+    {
+      panels.map((panel, index) => (
+        <div
+          id={`panel-${panel.id}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${panel.id}`}
+          hidden={index !== 0}
+          class="py-8"
+        >
+          {panel.events.length === 0 ? (
+            <Empty title={panel.emptyTitle}>
+              {panel.id === "upcoming"
+                ? "No tournaments are on the calendar right now. Club admins add them here."
+                : "Completed tournaments and their results will appear here."}
+            </Empty>
+          ) : (
+            <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
+              <table class="w-full min-w-[760px] border-collapse text-left">
+                <thead>
+                  <tr class="border-b border-hairline-soft">
+                    <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      Tier
+                    </th>
+                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      Tournament
+                    </th>
+                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      Dates
+                    </th>
+                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      Location
+                    </th>
+                    <th class="px-3 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      Prize pool
+                    </th>
+                    <th class="px-4 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      {panel.id === "past" ? "Best finish" : "Entries"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {panel.events.map((event) => {
+                    const summary = summaries.get(event.id);
+                    return (
+                      <tr class="border-b border-hairline-soft last:border-0 hover:bg-soft/50">
+                        <td class="px-4 py-3">
+                          <Badge tone={levelTone(event.level)}>
+                            {event.level}
+                          </Badge>
+                        </td>
+                        <td class="px-3 py-3">
+                          <a
+                            href={`/tournaments/${event.slug}`}
+                            class="text-[14px] font-medium leading-5 text-ink hover:underline"
+                          >
+                            {event.name}
+                          </a>
+                          <div class="flex items-center gap-2">
+                            {event.status === "ongoing" && (
+                              <span class="text-[12px] uppercase leading-4 text-error tracking-[0.06em]">
+                                Live now
+                              </span>
+                            )}
+                            {event.organizer && (
+                              <span class="truncate text-[12px] leading-4 text-mute">
+                                {event.organizer}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-3 tracking-[0.06em] text-[12px] uppercase leading-4 text-body">
+                          {dateRange(event)}
+                        </td>
+                        <td class="px-3 py-3 text-[14px] leading-5 text-body">
+                          {event.venue ?? "—"}
+                          {event.city && (
+                            <span class="block text-[12px] leading-4 text-faint">
+                              {event.city}
+                            </span>
+                          )}
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-3 text-right text-[14px] leading-5 text-ink tabular-nums">
+                          {event.prize_pool ? money(event.prize_pool) : "—"}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                          {panel.id === "past" ? (
+                            summary?.best ? (
+                              <Badge tone={resultTone(summary.best)}>
+                                {RESULT_LABELS[summary.best]}
+                              </Badge>
+                            ) : (
+                              <span class="text-[14px] leading-5 text-faint">
+                                —
+                              </span>
+                            )
+                          ) : (
+                            <span class="text-[14px] leading-5 text-body tabular-nums">
+                              {summary?.entries ?? 0}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))
+    }
+  </div>
+</Layout>
+
+<script>
+  const tabs = document.querySelectorAll<HTMLButtonElement>(".tab");
+  // button-pill-tab-active: the dark fill replaces the hairline outline.
+  // Selected = surface lift, per {components.pricing-tab-selected}.
+  const ACTIVE = ["bg-lift", "font-medium", "text-ink"];
+  const IDLE = ["text-mute", "hover:bg-soft", "hover:text-ink"];
+
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => {
+      for (const other of tabs) {
+        const isTarget = other === tab;
+        other.setAttribute("aria-selected", String(isTarget));
+        other.classList.remove(...ACTIVE, ...IDLE);
+        other.classList.add(...(isTarget ? ACTIVE : IDLE));
+
+        const panel = document.getElementById(
+          other.getAttribute("aria-controls")!,
+        );
+        if (panel) panel.hidden = !isTarget;
+      }
+    });
+  }
+</script>

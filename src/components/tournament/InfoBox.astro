@@ -1,0 +1,114 @@
+---
+/**
+ * The fact panel that sits beside a tournament, in the spirit of a wiki
+ * infobox: every structural detail in one scannable column, so the body of the
+ * page can get straight to the results.
+ */
+import Badge from "../ui/Badge.astro";
+import { money, shortDate } from "../../lib/format";
+import type { Tournament } from "../../lib/types";
+
+interface Props {
+  tournament: Tournament;
+  entryCount: number;
+  matchCount: number;
+}
+
+const { tournament, entryCount, matchCount } = Astro.props;
+
+const dateRange =
+  tournament.end_date &&
+  tournament.end_date.slice(0, 10) !== tournament.start_date.slice(0, 10)
+    ? `${shortDate(tournament.start_date)} – ${shortDate(tournament.end_date)}`
+    : shortDate(tournament.start_date);
+
+const rows = [
+  { label: "Series", value: tournament.organizer },
+  { label: "Level", value: tournament.level, mono: true },
+  { label: "Dates", value: dateRange },
+  { label: "Venue", value: tournament.venue },
+  { label: "Location", value: tournament.city },
+  {
+    label: "Prize pool",
+    value: tournament.prize_pool ? money(tournament.prize_pool) : null,
+  },
+  {
+    label: "Entry fee",
+    value: tournament.entry_fee ? money(tournament.entry_fee) : null,
+  },
+  {
+    label: "Draw size",
+    value: tournament.draw_size ? `${tournament.draw_size}` : null,
+    mono: true,
+  },
+  {
+    label: "Our entries",
+    value: entryCount ? `${entryCount}` : null,
+    mono: true,
+  },
+  { label: "Matches", value: matchCount ? `${matchCount}` : null, mono: true },
+  {
+    label: "Register by",
+    value: tournament.registration_deadline
+      ? shortDate(tournament.registration_deadline)
+      : null,
+  },
+].filter((row): row is { label: string; value: string; mono?: boolean } =>
+  Boolean(row.value),
+);
+
+const statusTone = {
+  upcoming: "neutral",
+  ongoing: "success",
+  completed: "neutral",
+  cancelled: "error",
+} as const;
+---
+
+<aside class="lg:sticky lg:top-6">
+  <div
+    class="overflow-hidden rounded-lg border border-hairline-soft bg-elevated shadow-panel"
+  >
+    <div
+      class="flex items-center justify-between gap-3 border-b border-hairline-soft px-5 py-4"
+    >
+      <h2 class="eyebrow">Tournament</h2>
+      <Badge tone={statusTone[tournament.status]}>
+        {tournament.status === "ongoing" ? "Live now" : tournament.status}
+      </Badge>
+    </div>
+
+    <dl class="divide-y divide-hairline-soft">
+      {
+        rows.map((row) => (
+          <div class="flex items-start justify-between gap-4 px-5 py-2.5">
+            <dt class="shrink-0 text-[14px] leading-[1.43] text-mute">
+              {row.label}
+            </dt>
+            <dd
+              class:list={[
+                "text-right text-[14px] font-medium leading-[1.43] text-ink",
+                row.mono && "uppercase !tracking-[0.06em]",
+              ]}
+            >
+              {row.value}
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    {
+      tournament.external_url && (
+        <a
+          href={tournament.external_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="block border-t border-hairline-soft px-5 py-3 text-[14px] font-medium leading-[1.43] text-link transition-colors hover:bg-soft"
+        >
+          Official page ↗
+        </a>
+      )
+    }
+  </div>
+</aside>

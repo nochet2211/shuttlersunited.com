@@ -1,0 +1,179 @@
+---
+/**
+ * The newsroom desk. Lists every story including drafts — this is the one place
+ * that reads posts without the published filter, which is safe because
+ * middleware has already gated /admin on the admin role.
+ */
+import AppLayout from "../../../layouts/AppLayout.astro";
+import Card from "../../../components/ui/Card.astro";
+import Badge from "../../../components/ui/Badge.astro";
+import Alert from "../../../components/ui/Alert.astro";
+import Button from "../../../components/ui/Button.astro";
+import Empty from "../../../components/ui/Empty.astro";
+import { actions } from "astro:actions";
+import { getAdminClient } from "../../../lib/pocketbase";
+import { categoryLabel } from "../../../lib/news";
+import { shortDate } from "../../../lib/format";
+import type { Post } from "../../../lib/types";
+
+const statusResult = Astro.getActionResult(actions.news.setStatus);
+const pinResult = Astro.getActionResult(actions.news.setPinned);
+const deleteResult = Astro.getActionResult(actions.news.deletePost);
+const error = statusResult?.error ?? pinResult?.error ?? deleteResult?.error;
+
+const pb = await getAdminClient();
+const posts = await pb
+  .collection("posts")
+  .getFullList<Post>({ sort: "-is_pinned,-published_at" });
+
+const drafts = posts.filter((post) => post.status === "draft").length;
+---
+
+<AppLayout
+  section="admin"
+  title="News"
+  eyebrow="Club administration"
+  heading="Newsroom"
+  description={`${posts.length} ${posts.length === 1 ? "story" : "stories"}${
+    drafts ? `, ${drafts} still in draft` : ""
+  }. The published ones are what the home page shows.`}
+>
+  <div class="flex flex-col gap-5">
+    {error && <Alert>{error.message}</Alert>}
+
+    <div class="flex justify-end">
+      <Button href="/admin/news/new">New story</Button>
+    </div>
+
+    {
+      posts.length === 0 ? (
+        <Empty title="No stories yet">
+          The home page is a news feed, so it stays empty until the first story
+          is published.
+          <Button slot="action" href="/admin/news/new" size="sm">
+            Write the first one
+          </Button>
+        </Empty>
+      ) : (
+        <Card padding="none">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[820px] border-collapse text-left">
+              <thead>
+                <tr class="border-b border-hairline-soft">
+                  {["Story", "Category", "Published", "Status", ""].map(
+                    (heading) => (
+                      <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        {heading}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {posts.map((post) => (
+                  <tr class="border-b border-hairline-soft last:border-0">
+                    <td class="px-4 py-3">
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <a
+                          href={`/admin/news/${post.id}`}
+                          class="text-[14px] font-medium leading-5 text-ink hover:underline"
+                        >
+                          {post.title}
+                        </a>
+                        <span class="text-[12px] leading-4 text-faint">
+                          /news/{post.slug}
+                          {post.source_name ? ` · ${post.source_name}` : ""}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td class="px-4 py-3">
+                      <Badge>{categoryLabel(post.category)}</Badge>
+                    </td>
+
+                    <td class="whitespace-nowrap px-4 py-3 text-[14px] leading-5 text-mute">
+                      {shortDate(post.published_at)}
+                    </td>
+
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-1.5">
+                        <Badge
+                          tone={
+                            post.status === "published" ? "success" : "neutral"
+                          }
+                        >
+                          {post.status === "published" ? "Live" : "Draft"}
+                        </Badge>
+                        {post.is_pinned && <Badge tone="ink">Pinned</Badge>}
+                      </div>
+                    </td>
+
+                    <td class="px-4 py-3">
+                      <div class="flex items-center justify-end gap-1.5">
+                        <form method="POST" action={actions.news.setPinned}>
+                          <input type="hidden" name="id" value={post.id} />
+                          <input
+                            type="hidden"
+                            name="pinned"
+                            value={post.is_pinned ? "" : "true"}
+                          />
+                          <Button type="submit" variant="ghost" size="sm">
+                            {post.is_pinned ? "Unpin" : "Pin"}
+                          </Button>
+                        </form>
+
+                        <form method="POST" action={actions.news.setStatus}>
+                          <input type="hidden" name="id" value={post.id} />
+                          <input
+                            type="hidden"
+                            name="status"
+                            value={
+                              post.status === "published"
+                                ? "draft"
+                                : "published"
+                            }
+                          />
+                          <Button type="submit" variant="secondary" size="sm">
+                            {post.status === "published"
+                              ? "Unpublish"
+                              : "Publish"}
+                          </Button>
+                        </form>
+
+                        <form
+                          method="POST"
+                          action={actions.news.deletePost}
+                          data-confirm={post.title}
+                        >
+                          <input type="hidden" name="id" value={post.id} />
+                          <Button type="submit" variant="ghost" size="sm">
+                            Delete
+                          </Button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )
+    }
+  </div>
+</AppLayout>
+
+<script>
+  // Deleting a story is not recoverable, and the delete button sits next to
+  // Publish. Progressive enhancement only — the action itself is the guard.
+  for (const form of document.querySelectorAll<HTMLFormElement>(
+    "form[data-confirm]",
+  )) {
+    form.addEventListener("submit", (event) => {
+      const title = form.dataset.confirm ?? "this story";
+      if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) {
+        event.preventDefault();
+      }
+    });
+  }
+</script>

@@ -1,0 +1,33 @@
+---
+/**
+ * The playoff draw, one column per round. Columns scroll horizontally rather
+ * than wrapping — a bracket that reflows stops being a bracket — and each
+ * column's matches are spread evenly so a match sits roughly opposite the two
+ * it was fed by.
+ */
+import BracketMatch from "./BracketMatch.astro";
+import type { BracketColumn } from "../../lib/tournament";
+
+interface Props {
+  columns: BracketColumn[];
+}
+
+const { columns } = Astro.props;
+---
+
+<div class="overflow-x-auto pb-2">
+  <div class="flex w-full min-w-max gap-4">
+    {
+      columns.map((column) => (
+        <div class="flex w-[260px] max-w-[320px] shrink-0 grow flex-col">
+          <h4 class="mb-3 eyebrow">{column.label}</h4>
+          <div class="flex flex-1 flex-col justify-around gap-3">
+            {column.matches.map((match) => (
+              <BracketMatch match={match} />
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>

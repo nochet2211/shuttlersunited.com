@@ -1,0 +1,61 @@
+---
+/**
+ * Feed filter. Selected is a surface lift, never an ink fill — DESIGN.md's
+ * {components.pricing-tab-selected} rule, the same one the dashboard rail and
+ * the mobile nav strip follow.
+ *
+ * Links rather than buttons: a filtered feed is a URL, so it can be shared and
+ * it survives with JavaScript off.
+ */
+import { CATEGORY_ORDER, categoryLabel } from "../../lib/news";
+import type { PostCategory } from "../../lib/types";
+
+interface Props {
+  /** The base path the chips link to — "/", the news feed. */
+  base: string;
+  active?: PostCategory | null;
+  counts?: Map<PostCategory, number>;
+  class?: string;
+}
+
+const { base, active = null, counts, class: className } = Astro.props;
+
+// A category with nothing in it is a dead end, so it doesn't get a chip.
+const available = CATEGORY_ORDER.filter(
+  (category) => !counts || (counts.get(category) ?? 0) > 0,
+);
+
+const chips = [
+  { href: base, label: "All", selected: active === null },
+  ...available.map((category) => ({
+    href: `${base}?category=${category}`,
+    label: categoryLabel(category),
+    selected: active === category,
+  })),
+];
+---
+
+<nav aria-label="Filter news" class:list={["min-w-0", className]}>
+  <ul class="flex min-w-0 gap-1 overflow-x-auto pb-1">
+    {
+      chips.map((chip) => (
+        <li class="shrink-0">
+          <a
+            href={chip.href}
+            aria-current={chip.selected ? "true" : undefined}
+            class:list={[
+              // The pill radius survives on tab toggles — one of the three
+              // places DESIGN.md keeps it.
+              "block whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] leading-5 transition-colors pointer-coarse:py-2",
+              chip.selected
+                ? "bg-lift font-medium text-ink"
+                : "text-mute hover:bg-soft hover:text-ink",
+            ]}
+          >
+            {chip.label}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

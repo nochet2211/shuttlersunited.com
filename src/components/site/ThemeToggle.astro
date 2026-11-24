@@ -1,0 +1,94 @@
+---
+/**
+ * `button-icon-circular` carrying the theme switch. Dark is the site default,
+ * so the OS preference only seeds a first visit — once someone picks, the
+ * choice sticks in localStorage and the toggle wins in both directions.
+ *
+ * Both icons render; CSS shows exactly one, so the button is correct on the
+ * very first paint without waiting for JS to decide.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<button
+  type="button"
+  id="theme-toggle"
+  class:list={[
+    "grid size-10 shrink-0 place-items-center rounded-md border border-hairline bg-elevated text-ink transition-colors hover:bg-soft",
+    className,
+  ]}
+  aria-label="Switch theme"
+  aria-pressed="false"
+>
+  <!-- Shown while dark is active: pressing it goes to light. -->
+  <svg
+    class="theme-icon-sun size-5"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4.2"></circle>
+    <path
+      d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"
+    ></path>
+  </svg>
+
+  <!-- Shown while light is active: pressing it goes to dark. -->
+  <svg
+    class="theme-icon-moon size-5"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M20.5 14.4A8.6 8.6 0 0 1 9.6 3.5a8.6 8.6 0 1 0 10.9 10.9Z"></path>
+  </svg>
+</button>
+
+<style is:global>
+  /* No-JS-flicker icon swap: the same class that themes the page picks the icon. */
+  .theme-icon-sun {
+    display: none;
+  }
+  .dark .theme-icon-sun {
+    display: block;
+  }
+  .dark .theme-icon-moon {
+    display: none;
+  }
+</style>
+
+<script>
+  const button = document.getElementById("theme-toggle");
+  const root = document.documentElement;
+
+  const sync = () => {
+    const dark = root.classList.contains("dark");
+    button?.setAttribute("aria-pressed", String(dark));
+    button?.setAttribute(
+      "aria-label",
+      dark ? "Switch to light theme" : "Switch to dark theme",
+    );
+  };
+
+  button?.addEventListener("click", () => {
+    const dark = root.classList.toggle("dark");
+    try {
+      localStorage.setItem("su-theme", dark ? "dark" : "light");
+    } catch {
+      // Private browsing — the toggle still works for this page view.
+    }
+    sync();
+  });
+
+  sync();
+</script>

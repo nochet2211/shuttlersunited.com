@@ -1,0 +1,87 @@
+---
+import Layout from "./Layout.astro";
+import Eyebrow from "../components/ui/Eyebrow.astro";
+
+interface Props {
+  title: string;
+  heading: string;
+  eyebrow: string;
+  description?: string;
+  /** 'member' renders the dashboard rail, 'admin' the admin rail. */
+  section: "member" | "admin";
+}
+
+const { title, heading, eyebrow, description, section } = Astro.props;
+const path = Astro.url.pathname;
+
+const memberNav = [
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/payments", label: "Dues & payments" },
+  { href: "/dashboard/bookings", label: "My bookings" },
+  { href: "/dashboard/profile", label: "Profile & gear" },
+];
+
+const adminNav = [
+  { href: "/admin", label: "Overview" },
+  { href: "/admin/news", label: "News" },
+  { href: "/admin/members", label: "Members" },
+  { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/bookings", label: "Bookings" },
+];
+
+const nav = section === "admin" ? adminNav : memberNav;
+// Exact match only — otherwise"/dashboard" highlights on every sub-page.
+const isCurrent = (href: string) => path === href;
+---
+
+<Layout title={title} description={description}>
+  <div class="shell">
+    <header class="flex flex-col gap-2 border-b border-hairline-soft pb-8">
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h1 class="heading-lg">{heading}</h1>
+      {
+        description && (
+          <p class="subtitle-md max-w-xl text-body">{description}</p>
+        )
+      }
+    </header>
+
+    <div class="grid gap-6 pt-6 lg:grid-cols-[188px_1fr]">
+      {
+        /* min-w-0: without it this grid item's automatic minimum size is the
+          full un-scrolled width of the tab strip, which widens the single
+          mobile column and pushes the whole page into horizontal scroll. */
+      }
+      <nav
+        aria-label={section === "admin" ? "Admin" : "Dashboard"}
+        class="min-w-0"
+      >
+        <ul
+          class="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0"
+        >
+          {
+            nav.map((item) => (
+              <li class="shrink-0">
+                <a
+                  href={item.href}
+                  aria-current={isCurrent(item.href) ? "page" : undefined}
+                  class:list={[
+                    // Selected = surface lift, per {components.pricing-tab-selected}.
+                    "block whitespace-nowrap rounded-md px-3 py-1.5 text-[14px] leading-5 transition-colors",
+                    isCurrent(item.href)
+                      ? "bg-lift font-medium text-ink"
+                      : "text-mute hover:bg-soft hover:text-ink",
+                  ]}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <div class="min-w-0"><slot /></div>
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,11 @@
+---
+/**
+ * The news page and the home page are the same page. This route only exists so
+ * that /news/<slug> has a parent that resolves, and so any link already
+ * pointing at /news lands somewhere sensible.
+ *
+ * A temporary redirect rather than a permanent one: browsers cache a 308 hard
+ * enough that undoing this later would strand anyone who had visited.
+ */
+return Astro.redirect(`/${Astro.url.search}`, 302);
+---

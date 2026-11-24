@@ -1,0 +1,378 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Card from "../../components/ui/Card.astro";
+import Field from "../../components/ui/Field.astro";
+import Button from "../../components/ui/Button.astro";
+import Alert from "../../components/ui/Alert.astro";
+import Avatar from "../../components/ui/Avatar.astro";
+import Badge from "../../components/ui/Badge.astro";
+import { actions, isInputError } from "astro:actions";
+import { listGearFor } from "../../lib/queries";
+import { memberAvatar } from "../../lib/files";
+import { resolveMember } from "../../lib/auth";
+
+// Re-read after a mutation so the form shows what was just saved rather than
+// the snapshot middleware took before the action ran.
+const updateResult = Astro.getActionResult(actions.profile.update);
+const avatarResult = Astro.getActionResult(actions.profile.uploadAvatar);
+const gearResult = Astro.getActionResult(actions.profile.addGear);
+
+const mutated = Boolean(
+  updateResult?.data || avatarResult?.data || gearResult?.data,
+);
+const member = mutated
+  ? (await resolveMember(Astro.cookies))!
+  : Astro.locals.member!;
+
+const gear = await listGearFor(member.id);
+
+const fieldErrors = isInputError(updateResult?.error)
+  ? updateResult.error.fields
+  : {};
+const saved = Boolean(updateResult?.data);
+
+const events = ["MS", "WS", "MD", "WD", "XD"] as const;
+const gearCategories = [
+  "racket",
+  "string",
+  "grip",
+  "shoes",
+  "shuttle",
+  "bag",
+  "apparel",
+] as const;
+
+const selectClass =
+  "h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink focus:border-2 focus:border-focus focus:outline-none";
+---
+
+<AppLayout
+  section="member"
+  title="Profile & gear"
+  eyebrow="Your details"
+  heading="Profile & gear"
+  description="What other members see on your roster page."
+>
+  <div class="flex flex-col gap-6">
+    {saved && <Alert tone="success">Profile saved.</Alert>}
+    {
+      updateResult?.error && !isInputError(updateResult.error) && (
+        <Alert>{updateResult.error.message}</Alert>
+      )
+    }
+    {avatarResult?.error && <Alert>{avatarResult.error.message}</Alert>}
+
+    {/* ------------------------------------------------------------ photo */}
+    <Card padding="lg">
+      <div class="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+        <Avatar
+          name={member.name}
+          src={memberAvatar(member, "300x300")}
+          size="xl"
+        />
+
+        <div class="flex min-w-0 flex-1 flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <h2 class="heading-md">Profile photo</h2>
+            <p class="text-[14px] leading-5 text-mute">
+              Square JPEG, PNG or WebP, under 5 MB. Members without a photo show
+              their initials.
+            </p>
+          </div>
+
+          <form
+            method="POST"
+            action={actions.profile.uploadAvatar}
+            enctype="multipart/form-data"
+            class="flex w-full min-w-0 flex-wrap items-center gap-3"
+          >
+            <input
+              type="file"
+              name="avatar"
+              accept="image/jpeg,image/png,image/webp"
+              required
+              class="w-full min-w-0 text-[14px] text-body file:mr-3 file:rounded-md file:border file:border-hairline file:bg-elevated file:px-3 file:py-1.5 file:text-[14px] file:font-medium file:text-ink"
+            />
+            <Button type="submit" variant="secondary" size="sm">Upload</Button>
+          </form>
+        </div>
+      </div>
+    </Card>
+
+    {/* ---------------------------------------------------------- details */}
+    <Card padding="lg">
+      <form
+        method="POST"
+        action={actions.profile.update}
+        class="flex flex-col gap-5"
+      >
+        <h2 class="heading-md">Your details</h2>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Full name"
+            name="name"
+            value={member.name}
+            required
+            error={fieldErrors.name?.join(" ")}
+          />
+          <Field
+            label="City"
+            name="city"
+            value={member.city ?? ""}
+            error={fieldErrors.city?.join(" ")}
+          />
+          <Field
+            label="Date of birth"
+            name="date_of_birth"
+            type="date"
+            value={member.date_of_birth?.slice(0, 10) ?? ""}
+          />
+          <Field
+            label="Height (cm)"
+            name="height_cm"
+            type="number"
+            min={100}
+            max={250}
+            value={member.height_cm ?? ""}
+          />
+          <Field
+            label="Squad number"
+            name="jersey_number"
+            type="number"
+            min={0}
+            max={999}
+            value={member.jersey_number ?? ""}
+          />
+          <Field
+            label="Emergency contact"
+            name="emergency_contact"
+            type="tel"
+            value={member.emergency_contact ?? ""}
+            hint="Visible only to club admins."
+          />
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label for="gender" class="label-sm text-ink">Category</label>
+            <select id="gender" name="gender" class={selectClass}>
+              <option value="">Prefer not to say</option>
+              {
+                ["male", "female", "other"].map((value) => (
+                  <option value={value} selected={member.gender === value}>
+                    {value === "male"
+                      ? "Men's"
+                      : value === "female"
+                        ? "Women's"
+                        : "Other"}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label for="handedness" class="label-sm text-ink"
+              >Playing hand</label
+            >
+            <select id="handedness" name="handedness" class={selectClass}>
+              <option value="">Not set</option>
+              <option value="right" selected={member.handedness === "right"}
+                >Right-handed</option
+              >
+              <option value="left" selected={member.handedness === "left"}
+                >Left-handed</option
+              >
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label for="play_style" class="label-sm text-ink"
+              >Playing style</label
+            >
+            <select id="play_style" name="play_style" class={selectClass}>
+              <option value="">Not set</option>
+              {
+                ["attacking", "defensive", "all-round"].map((value) => (
+                  <option value={value} selected={member.play_style === value}>
+                    {value[0].toUpperCase() + value.slice(1)}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label for="skill_level" class="label-sm text-ink">Level</label>
+            <select id="skill_level" name="skill_level" class={selectClass}>
+              {
+                ["beginner", "intermediate", "advanced", "competitive"].map(
+                  (value) => (
+                    <option
+                      value={value}
+                      selected={member.skill_level === value}
+                    >
+                      {value[0].toUpperCase() + value.slice(1)}
+                    </option>
+                  ),
+                )
+              }
+            </select>
+          </div>
+        </div>
+
+        <fieldset class="flex flex-col gap-2">
+          <legend class="label-sm mb-1 text-ink">Preferred events</legend>
+          <div class="flex flex-wrap gap-2">
+            {
+              events.map((event) => (
+                <label class="flex cursor-pointer items-center gap-2 rounded-full border border-hairline bg-elevated px-3 py-1.5 text-[14px] leading-5 text-ink has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-on-ink">
+                  <input
+                    type="checkbox"
+                    name="preferred_events"
+                    value={event}
+                    checked={member.preferred_events?.includes(event)}
+                    class="size-3.5 accent-ink has-[:checked]:accent-white"
+                  />
+                  {event}
+                </label>
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="bio" class="label-sm text-ink">Bio</label>
+          <textarea
+            id="bio"
+            name="bio"
+            rows="3"
+            maxlength="600"
+            placeholder="How you play, who you like partnering with, what you're working on."
+            class="w-full rounded-md border border-hairline bg-elevated px-3 py-2.5 text-[16px] leading-[1.5] text-ink placeholder:text-faint focus:border-2 focus:border-focus focus:outline-none"
+            >{member.bio ?? ""}</textarea
+          >
+        </div>
+
+        <label
+          class="flex items-start gap-2.5 rounded-md border border-hairline bg-canvas p-3"
+        >
+          <input
+            type="checkbox"
+            name="is_public"
+            value="true"
+            checked={member.is_public}
+            class="mt-0.5 size-4 shrink-0 rounded-xs accent-ink"
+          />
+          <span class="text-[14px] leading-5 text-body">
+            Show my profile on the public roster
+            <span class="block text-[12px] leading-4 text-mute">
+              Your phone number and emergency contact are never shown publicly.
+            </span>
+          </span>
+        </label>
+
+        <Button type="submit" variant="primary" class="self-start"
+          >Save changes</Button
+        >
+      </form>
+    </Card>
+
+    {/* ------------------------------------------------------------- gear */}
+    <Card padding="lg">
+      <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-1">
+          <h2 class="heading-md">In the bag</h2>
+          <p class="text-[14px] leading-5 text-mute">
+            The racket, tension and shoes you actually play with — the detail
+            other members ask about.
+          </p>
+        </div>
+
+        {gearResult?.error && <Alert>{gearResult.error.message}</Alert>}
+
+        {
+          gear.length > 0 && (
+            <ul class="divide-y divide-hairline-soft rounded-lg border border-hairline-soft">
+              {gear.map((item) => (
+                <li class="flex items-center justify-between gap-4 px-4 py-3">
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[12px] uppercase leading-4 text-faint tracking-[0.06em]">
+                        {item.category}
+                      </span>
+                      {!item.is_current && (
+                        <Badge tone="neutral">Retired</Badge>
+                      )}
+                    </div>
+                    <span class="truncate text-[14px] font-medium leading-5 text-ink">
+                      {item.brand} {item.model}
+                    </span>
+                    {item.spec && (
+                      <span class="text-[12px] leading-4 text-mute">
+                        {item.spec}
+                      </span>
+                    )}
+                  </div>
+
+                  <form method="POST" action={actions.profile.removeGear}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button
+                      type="submit"
+                      class="rounded-md border border-hairline px-2.5 py-1 text-[12px] leading-4 text-body transition-colors hover:border-error/30 hover:text-error"
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+
+        <form
+          method="POST"
+          action={actions.profile.addGear}
+          class="flex flex-col gap-4 rounded-lg border border-dashed border-hairline-soft p-4"
+        >
+          <div class="grid gap-3 sm:grid-cols-4">
+            <div class="flex flex-col gap-1.5">
+              <label for="category" class="label-sm text-ink">Type</label>
+              <select
+                id="category"
+                name="category"
+                class={selectClass}
+                required
+              >
+                {
+                  gearCategories.map((value) => (
+                    <option value={value}>
+                      {value[0].toUpperCase() + value.slice(1)}
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+            <Field label="Brand" name="brand" placeholder="Yonex" required />
+            <Field
+              label="Model"
+              name="model"
+              placeholder="Astrox 100 ZZ"
+              required
+            />
+            <Field label="Spec" name="spec" placeholder="4U G5 · 27 lbs" />
+          </div>
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            class="self-start"
+          >
+            Add to bag
+          </Button>
+        </form>
+      </div>
+    </Card>
+  </div>
+</AppLayout>

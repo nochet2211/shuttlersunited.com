@@ -1,0 +1,18 @@
+---
+interface Props {
+  title: string;
+  class?: string;
+}
+const { title, class: className } = Astro.props;
+---
+
+<div
+  class:list={[
+    "flex flex-col items-center gap-2 rounded-lg border border-dashed border-hairline bg-elevated px-6 py-12 text-center",
+    className,
+  ]}
+>
+  <p class="heading-md text-ink">{title}</p>
+  <p class="max-w-sm text-[14px] leading-[1.5] text-mute"><slot /></p>
+  <slot name="action" />
+</div>

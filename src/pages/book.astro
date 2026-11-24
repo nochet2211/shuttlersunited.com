@@ -1,0 +1,337 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Button from "../components/ui/Button.astro";
+import Alert from "../components/ui/Alert.astro";
+import Eyebrow from "../components/ui/Eyebrow.astro";
+import Empty from "../components/ui/Empty.astro";
+import { actions, isInputError } from "astro:actions";
+import { listCourts, listBookingsOn } from "../lib/queries";
+import {
+  DAY_START_MINUTE,
+  DAY_END_MINUTE,
+  SLOT_MINUTES,
+} from "../actions/bookings";
+import { minuteToTime, dateKey, money } from "../lib/format";
+
+const member = Astro.locals.member!;
+
+const result = Astro.getActionResult(actions.bookings.create);
+
+// Zod refine failures arrive as an input error whose `message` is a JSON dump.
+// Surface the field messages instead so the member reads plain English.
+const bookingError = isInputError(result?.error)
+  ? Object.values(result.error.fields).flat().join(" ")
+  : result?.error?.message;
+
+// Which day the grid shows. Clamped to the bookable window so a hand-edited
+// ?date= can't render a grid for a slot the action would reject anyway.
+const today = dateKey();
+const horizon = new Date();
+horizon.setDate(horizon.getDate() + 14);
+const maxDate = dateKey(horizon);
+
+const requested = Astro.url.searchParams.get("date") ?? today;
+const selectedDate =
+  requested >= today && requested <= maxDate ? requested : today;
+
+const [courts, booked] = await Promise.all([
+  listCourts(),
+  listBookingsOn(selectedDate),
+]);
+
+// Build the slot grid: for each court, every 30-minute slot and who holds it.
+const slots: number[] = [];
+for (
+  let minute = DAY_START_MINUTE;
+  minute < DAY_END_MINUTE;
+  minute += SLOT_MINUTES
+) {
+  slots.push(minute);
+}
+
+const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+const isToday = selectedDate === today;
+
+const grid = courts.map((court) => ({
+  court,
+  cells: slots.map((minute) => {
+    const holder = booked.find(
+      (b) =>
+        b.court === court.id &&
+        b.start_minute <= minute &&
+        b.end_minute > minute,
+    );
+    return {
+      minute,
+      holder,
+      // A slot that has already started today can't be booked.
+      past: isToday && minute < nowMinutes,
+    };
+  }),
+}));
+
+// The next seven days, for the date strip.
+const days = Array.from({ length: 8 }, (_, offset) => {
+  const date = new Date(`${today}T00:00:00`);
+  date.setDate(date.getDate() + offset);
+  return {
+    key: dateKey(date),
+    weekday: date.toLocaleDateString("en-IN", { weekday: "short" }),
+    day: date.getDate(),
+    month: date.toLocaleDateString("en-IN", { month: "short" }),
+  };
+});
+---
+
+<Layout
+  title="Book a court"
+  description="Reserve court time at Shuttlers United."
+>
+  <div class="shell">
+    <header class="flex flex-col gap-2 border-b border-hairline-soft pb-8">
+      <Eyebrow>Court booking</Eyebrow>
+      <h1 class="heading-lg">Book a court</h1>
+      <p class="subtitle-md max-w-xl text-body">
+        Pick a start time. Bookings run in 30-minute slots, up to two hours at a
+        stretch, and you can hold three at once.
+      </p>
+    </header>
+
+    {/* -------------------------------------------------------- date strip */}
+    <div class="flex gap-2 overflow-x-auto py-6">
+      {
+        days.map((day) => {
+          const active = day.key === selectedDate;
+          return (
+            <a
+              href={`/book?date=${day.key}`}
+              aria-current={active ? "date" : undefined}
+              class:list={[
+                "flex shrink-0 flex-col items-center gap-0.5 rounded-md border px-4 py-2.5 transition-colors",
+                active
+                  ? "border-primary bg-primary-soft text-ink"
+                  : "border-hairline bg-elevated text-mute hover:bg-soft hover:text-ink",
+              ]}
+            >
+              <span
+                class:list={[
+                  "text-[12px] uppercase leading-4 tracking-[0.06em]",
+                  active ? "text-link" : "text-faint",
+                ]}
+              >
+                {day.weekday}
+              </span>
+              <span class="text-[18px] font-medium leading-6 tracking-[-0.4px]">
+                {day.day}
+              </span>
+              <span
+                class:list={[
+                  "text-[12px] leading-4",
+                  active ? "text-on-ink/70" : "text-mute",
+                ]}
+              >
+                {day.month}
+              </span>
+            </a>
+          );
+        })
+      }
+    </div>
+
+    {bookingError && <Alert class="mb-6">{bookingError}</Alert>}
+    {
+      result?.data && (
+        <Alert tone="success" class="mb-6">
+          Court booked. See it on{" "}
+          <a href="/dashboard/bookings" class="underline">
+            your bookings
+          </a>
+          .
+        </Alert>
+      )
+    }
+
+    {
+      courts.length === 0 ? (
+        <Empty title="No courts configured">
+          A club admin needs to add courts before bookings can open.
+        </Empty>
+      ) : (
+        <div class="flex flex-col gap-8 pb-4">
+          {grid.map(({ court, cells }) => (
+            <section>
+              <div class="mb-3 flex items-baseline justify-between gap-4">
+                <h2 class="heading-md">
+                  {court.name}
+                  <span class="ml-2 text-[14px] font-normal text-mute">
+                    {court.venue}
+                  </span>
+                </h2>
+                <span class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+                  {money(court.hourly_rate)}/hr
+                  {court.surface ? ` · ${court.surface}` : ""}
+                </span>
+              </div>
+
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-1.5">
+                {cells.map((cell) => {
+                  const mine = cell.holder?.member === member.id;
+                  const taken = Boolean(cell.holder);
+
+                  if (taken || cell.past) {
+                    return (
+                      <div
+                        class:list={[
+                          "flex flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-2.5 text-center",
+                          mine
+                            ? "border-primary bg-primary-soft text-ink"
+                            : "border-hairline-soft bg-soft text-mute",
+                        ]}
+                        title={
+                          mine
+                            ? "Your booking"
+                            : taken
+                              ? `Taken by ${cell.holder?.expand?.member?.name ?? "a member"}`
+                              : "This slot has passed"
+                        }
+                      >
+                        <span class="text-[12px] leading-4">
+                          {minuteToTime(cell.minute)}
+                        </span>
+                        <span class="text-[12px] leading-3">
+                          {mine ? "Yours" : taken ? "Taken" : "Past"}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      class="slot flex flex-col items-center justify-center gap-0.5 rounded-md border border-hairline bg-soft px-2 py-3 text-center transition-colors hover:border-ink hover:bg-elevated"
+                      data-court={court.id}
+                      data-court-name={court.name}
+                      data-minute={cell.minute}
+                      data-time={minuteToTime(cell.minute)}
+                    >
+                      <span class="text-[12px] leading-4 text-ink">
+                        {minuteToTime(cell.minute)}
+                      </span>
+                      <span class="text-[12px] leading-3 text-mute">Free</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )
+    }
+  </div>
+
+  {/* ------------------------------------------------------- booking dialog */}
+  <dialog
+    id="book-dialog"
+    class="w-[min(420px,calc(100vw-32px))] rounded-lg border border-hairline-soft bg-elevated p-0 shadow-panel backdrop:bg-[#0a0e1a]/40 backdrop:backdrop-blur-sm"
+  >
+    <form
+      method="POST"
+      action={actions.bookings.create}
+      class="flex flex-col gap-5 p-6"
+    >
+      <div class="flex flex-col gap-1">
+        <h2 class="heading-md">Confirm booking</h2>
+        <p id="dialog-summary" class="text-[16px] leading-[1.5] text-body"></p>
+      </div>
+
+      <input type="hidden" name="court" id="dialog-court" />
+      <input type="hidden" name="date" value={selectedDate} />
+      <input type="hidden" name="start_minute" id="dialog-start" />
+      {
+        /* The member picks a duration; the action wants an absolute end minute,
+ so the script derives this from start + duration. */
+      }
+      <input type="hidden" name="end_minute" id="dialog-end" />
+
+      <div class="flex flex-col gap-1.5">
+        <label for="dialog-duration" class="label-sm text-ink">Duration</label>
+        <select
+          id="dialog-duration"
+          class="h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink focus:border-2 focus:border-focus focus:outline-none"
+        >
+          <option value="30">30 minutes</option>
+          <option value="60" selected>1 hour</option>
+          <option value="90">1 hour 30</option>
+          <option value="120">2 hours</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="dialog-notes" class="label-sm text-ink">
+          Notes <span class="font-normal text-mute">(optional)</span>
+        </label>
+        <input
+          id="dialog-notes"
+          name="notes"
+          maxlength="300"
+          placeholder="Doubles with Rahul and Priya"
+          class="h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink placeholder:text-faint focus:border-2 focus:border-focus focus:outline-none"
+        />
+      </div>
+
+      <div class="flex gap-2">
+        <Button type="submit" variant="buy" full>Confirm booking</Button>
+        <Button type="button" variant="secondary" id="dialog-cancel"
+          >Back</Button
+        >
+      </div>
+    </form>
+  </dialog>
+</Layout>
+
+<script>
+  const dialog = document.getElementById(
+    "book-dialog",
+  ) as HTMLDialogElement | null;
+  const courtInput = document.getElementById(
+    "dialog-court",
+  ) as HTMLInputElement | null;
+  const startInput = document.getElementById(
+    "dialog-start",
+  ) as HTMLInputElement | null;
+  const endInput = document.getElementById(
+    "dialog-end",
+  ) as HTMLInputElement | null;
+  const duration = document.getElementById(
+    "dialog-duration",
+  ) as HTMLSelectElement | null;
+  const summary = document.getElementById("dialog-summary");
+
+  let startMinute = 0;
+
+  function syncEnd() {
+    if (endInput && duration) {
+      endInput.value = String(startMinute + Number(duration.value));
+    }
+  }
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>(".slot")) {
+    button.addEventListener("click", () => {
+      startMinute = Number(button.dataset.minute);
+
+      if (courtInput) courtInput.value = button.dataset.court ?? "";
+      if (startInput) startInput.value = String(startMinute);
+      if (duration) duration.value = "60";
+      if (summary)
+        summary.textContent = `${button.dataset.courtName} at ${button.dataset.time}.`;
+
+      syncEnd();
+      dialog?.showModal();
+    });
+  }
+
+  duration?.addEventListener("change", syncEnd);
+  document
+    .getElementById("dialog-cancel")
+    ?.addEventListener("click", () => dialog?.close());
+</script>

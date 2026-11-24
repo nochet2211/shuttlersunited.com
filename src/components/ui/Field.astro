@@ -1,0 +1,95 @@
+---
+/** Label + input + error, matching the text-input spec in DESIGN.md. */
+import type { HTMLAttributes } from "astro/types";
+
+type InputType = NonNullable<HTMLAttributes<"input">["type"]>;
+type InputMode = NonNullable<HTMLAttributes<"input">["inputmode"]>;
+
+interface Props {
+  label: string;
+  name: string;
+  type?: InputType;
+  value?: string | number;
+  placeholder?: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  autocomplete?: string;
+  inputmode?: InputMode;
+  maxlength?: number;
+  min?: string | number;
+  max?: string | number;
+  class?: string;
+}
+
+const {
+  label,
+  name,
+  type = "text",
+  value,
+  placeholder,
+  required = false,
+  hint,
+  error,
+  autocomplete,
+  inputmode,
+  maxlength,
+  min,
+  max,
+  class: className,
+} = Astro.props;
+
+const describedBy = [error && `${name}-error`, hint && `${name}-hint`]
+  .filter(Boolean)
+  .join(" ");
+---
+
+<div class:list={["flex flex-col gap-1.5", className]}>
+  <label for={name} class="label-sm text-body">
+    {label}{required && <span class="text-error"> *</span>}
+  </label>
+
+  <!-- {components.text-input}: surface-1 fill, {rounded.md} 8px, 8px/12px
+ padding. 40px tall to match the md button. The focused state keeps the
+ surface and adds the level-4 focus ring rather than thickening a rule;
+ inputs grow to the 44px touch floor on coarse pointers. -->
+  <input
+    id={name}
+    name={name}
+    type={type}
+    value={value}
+    placeholder={placeholder}
+    required={required}
+    autocomplete={autocomplete}
+    inputmode={inputmode}
+    maxlength={maxlength}
+    min={min}
+    max={max}
+    aria-invalid={error ? "true" : undefined}
+    aria-describedby={describedBy || undefined}
+    class:list={[
+      "h-10 w-full rounded-md border bg-elevated px-3 text-[16px] leading-[1.5] tracking-[-0.05px] text-ink",
+      "placeholder:text-faint focus:outline-2 focus:outline-offset-0 focus:outline-focus/50",
+      "pointer-coarse:h-11",
+      error ? "border-error-strong" : "border-hairline",
+    ]}
+  />
+
+  {
+    hint && !error && (
+      <p id={`${name}-hint`} class="text-[12px] leading-[1.4] text-mute">
+        {hint}
+      </p>
+    )
+  }
+  {
+    error && (
+      <p
+        id={`${name}-error`}
+        class="text-[12px] leading-[1.4] text-error-strong"
+      >
+        {error}
+      </p>
+    )
+  }
+</div>

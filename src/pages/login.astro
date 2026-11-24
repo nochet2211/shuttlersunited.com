@@ -1,0 +1,179 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Card from "../components/ui/Card.astro";
+import Field from "../components/ui/Field.astro";
+import Button from "../components/ui/Button.astro";
+import Alert from "../components/ui/Alert.astro";
+import Eyebrow from "../components/ui/Eyebrow.astro";
+import { actions, isInputError } from "astro:actions";
+import { formatPhone } from "../lib/otp";
+
+// Already signed in — nothing to do here.
+if (Astro.locals.member) {
+  return Astro.redirect("/dashboard");
+}
+
+const next = Astro.url.searchParams.get("next") ?? "/dashboard";
+// Only same-site paths, so `?next=` can't be turned into an open redirect.
+const safeNext =
+  next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+
+const requestResult = Astro.getActionResult(actions.auth.requestOtp);
+const verifyResult = Astro.getActionResult(actions.auth.verifyOtp);
+
+if (verifyResult?.data?.status === "signed-in") {
+  return Astro.redirect(safeNext);
+}
+if (verifyResult?.data?.status === "signup") {
+  return Astro.redirect("/join/profile");
+}
+
+// Which step to render: the code form once a code has gone out.
+const sentPhone = requestResult?.data?.phone ?? null;
+const step: "phone" | "code" = sentPhone ? "code" : "phone";
+
+const requestError = requestResult?.error;
+const verifyError = verifyResult?.error;
+
+const phoneFieldError = isInputError(requestError)
+  ? requestError.fields.phone?.join(" ")
+  : undefined;
+const codeFieldError = isInputError(verifyError)
+  ? verifyError.fields.code?.join(" ")
+  : undefined;
+
+// Surfaced only when Gupshup isn't configured, so the flow is testable locally.
+const devCode = requestResult?.data?.devCode;
+---
+
+<Layout
+  title="Log in"
+  description="Log in to Shuttlers United with your mobile number."
+>
+  <div class="shell flex justify-center">
+    <div class="w-full max-w-md">
+      <Card padding="lg">
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-2">
+            <Eyebrow>Members</Eyebrow>
+            <h1 class="heading-lg">
+              {step === "phone" ? "Log in" : "Enter your code"}
+            </h1>
+            <p class="text-[16px] leading-[1.5] text-body">
+              {
+                step === "phone"
+                  ? "We’ll send a 6-digit code to your WhatsApp. No password to remember."
+                  : `Sent to ${formatPhone(sentPhone!)} on WhatsApp.`
+              }
+            </p>
+          </div>
+
+          {
+            devCode && (
+              <Alert tone="warning">
+                <strong class="font-medium">Development mode.</strong> WhatsApp
+                isn't configured, so your code is{" "}
+                <code class="rounded-xs bg-warning/20 px-1.5 py-0.5 font-mono text-[14px]">
+                  {devCode}
+                </code>
+                .
+              </Alert>
+            )
+          }
+
+          {
+            step === "phone" ? (
+              <>
+                {requestError && !phoneFieldError && (
+                  <Alert>{requestError.message}</Alert>
+                )}
+
+                <form
+                  method="POST"
+                  action={actions.auth.requestOtp}
+                  class="flex flex-col gap-4"
+                >
+                  <Field
+                    label="Mobile number"
+                    name="phone"
+                    type="tel"
+                    inputmode="numeric"
+                    autocomplete="tel"
+                    placeholder="98765 43210"
+                    required
+                    hint="Indian mobile numbers only, with or without +91."
+                    error={phoneFieldError}
+                  />
+                  <Button type="submit" variant="primary" full>
+                    Send code
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <>
+                {verifyError && !codeFieldError && (
+                  <Alert>{verifyError.message}</Alert>
+                )}
+
+                <form
+                  method="POST"
+                  action={actions.auth.verifyOtp}
+                  class="flex flex-col gap-4"
+                >
+                  <input type="hidden" name="phone" value={sentPhone} />
+                  <Field
+                    label="6-digit code"
+                    name="code"
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    placeholder="000000"
+                    maxlength={6}
+                    required
+                    error={codeFieldError}
+                    class="[&_input]:[&_input]:text-[18px] [&_input]:tracking-[0.4em]"
+                  />
+                  <Button type="submit" variant="primary" full>
+                    Verify and continue
+                  </Button>
+                </form>
+
+                <form
+                  method="POST"
+                  action={actions.auth.requestOtp}
+                  class="flex items-center justify-between gap-2"
+                >
+                  <input type="hidden" name="phone" value={sentPhone} />
+                  <span class="text-[12px] leading-4 text-mute">
+                    Didn't get it?
+                  </span>
+                  <button
+                    type="submit"
+                    class="text-[12px] font-medium leading-4 text-link hover:text-link-deep"
+                  >
+                    Resend code
+                  </button>
+                </form>
+              </>
+            )
+          }
+
+          <p
+            class="border-t border-hairline-soft pt-4 text-[12px] leading-4 text-mute"
+          >
+            New here? Verifying your number will start a membership.
+            <a href="/join" class="text-link hover:text-link-deep"
+              >See the plans first</a
+            >.
+          </p>
+        </div>
+      </Card>
+    </div>
+  </div>
+
+  <script is:inline define:vars={{ step }}>
+    // Autofocus the field the member actually needs, without a layout shift.
+    const field = document.querySelector(step === "phone" ? "#phone" : "#code");
+    field?.focus();
+  </script>
+</Layout>

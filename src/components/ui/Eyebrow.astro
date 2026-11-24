@@ -1,0 +1,9 @@
+---
+/** The small uppercase caption-bold label that introduces a section. */
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<p class:list={["eyebrow", className]}><slot /></p>

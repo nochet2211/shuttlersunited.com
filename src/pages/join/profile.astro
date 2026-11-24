@@ -1,0 +1,146 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Card from "../../components/ui/Card.astro";
+import Field from "../../components/ui/Field.astro";
+import Button from "../../components/ui/Button.astro";
+import Alert from "../../components/ui/Alert.astro";
+import Eyebrow from "../../components/ui/Eyebrow.astro";
+import { actions, isInputError } from "astro:actions";
+import { readVerifiedPhone } from "../../lib/auth";
+import { formatPhone } from "../../lib/otp";
+
+if (Astro.locals.member) {
+  return Astro.redirect("/dashboard");
+}
+
+// The action result must be read before the phone guard below: a successful
+// signup clears the pending-phone cookie, so checking the guard first would
+// bounce a member who just signed up straight back to the login page.
+const result = Astro.getActionResult(actions.auth.completeSignup);
+if (result?.data?.status === "signed-in") {
+  return Astro.redirect("/dashboard?welcome=1");
+}
+
+// Reaching this page without a proved phone number means the OTP step was
+// skipped or has expired — send them back rather than trusting a form field.
+const phone = readVerifiedPhone(Astro.cookies);
+if (!phone) {
+  return Astro.redirect("/login");
+}
+
+const error = result?.error;
+const fieldErrors = isInputError(error) ? error.fields : {};
+---
+
+<Layout title="Create your profile">
+  <div class="shell flex justify-center">
+    <div class="w-full max-w-md">
+      <Card padding="lg">
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-2">
+            <Eyebrow>Step 2 of 3</Eyebrow>
+            <h1 class="heading-lg">Create your profile</h1>
+            <p class="text-[14px] leading-5 text-body">
+              {formatPhone(phone)} is verified. Tell us who you are.
+            </p>
+          </div>
+
+          {error && !isInputError(error) && <Alert>{error.message}</Alert>}
+
+          <form
+            method="POST"
+            action={actions.auth.completeSignup}
+            class="flex flex-col gap-4"
+          >
+            <Field
+              label="Full name"
+              name="name"
+              autocomplete="name"
+              placeholder="Arjun Menon"
+              required
+              error={fieldErrors.name?.join(" ")}
+            />
+
+            <Field
+              label="City"
+              name="city"
+              autocomplete="address-level2"
+              placeholder="Dimapur"
+              error={fieldErrors.city?.join(" ")}
+            />
+
+            <div class="flex flex-col gap-1.5">
+              <label for="skill_level" class="label-sm text-ink"
+                >Playing level</label
+              >
+              <select
+                id="skill_level"
+                name="skill_level"
+                class="h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink focus:border-2 focus:border-focus focus:outline-none"
+              >
+                <option value="beginner">Beginner — just starting out</option>
+                <option value="intermediate" selected
+                  >Intermediate — play regularly</option
+                >
+                <option value="advanced">Advanced — competitive rallies</option>
+                <option value="competitive"
+                  >Competitive — I enter tournaments</option
+                >
+              </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label for="gender" class="label-sm text-ink">
+                Category
+                <span class="font-normal text-mute"
+                  >(for doubles and event draws)</span
+                >
+              </label>
+              <select
+                id="gender"
+                name="gender"
+                class="h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink focus:border-2 focus:border-focus focus:outline-none"
+              >
+                <option value="">Prefer not to say</option>
+                <option value="male">Men's</option>
+                <option value="female">Women's</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <Field
+              label="Date of birth"
+              name="date_of_birth"
+              type="date"
+              hint="Used for age-category events. Never shown publicly."
+              error={fieldErrors.date_of_birth?.join(" ")}
+            />
+
+            <label
+              class="flex items-start gap-2.5 rounded-md border border-hairline bg-canvas p-3"
+            >
+              <input
+                type="checkbox"
+                name="is_public"
+                value="true"
+                checked
+                class="mt-0.5 size-4 shrink-0 rounded-xs accent-ink"
+              />
+              <span class="text-[14px] leading-5 text-body">
+                Show my profile on the public roster.
+                <span class="block text-[12px] leading-4 text-mute">
+                  You can change this any time. Your phone number is never
+                  shown.
+                </span>
+              </span>
+            </label>
+
+            <Button type="submit" variant="primary" full class="mt-2">
+              Create my profile
+            </Button>
+          </form>
+        </div>
+      </Card>
+    </div>
+  </div>
+</Layout>

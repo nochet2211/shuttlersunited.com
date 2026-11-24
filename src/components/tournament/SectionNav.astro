@@ -1,0 +1,65 @@
+---
+/**
+ * Sticky in-page nav for a long tournament page. It highlights the section
+ * currently in view, which is the only affordance that makes a page this tall
+ * navigable without scrolling back to the top.
+ */
+interface Props {
+  sections: { id: string; label: string }[];
+}
+
+const { sections } = Astro.props;
+---
+
+<nav
+  class="sticky top-0 z-10 -mx-4 mb-8 border-b border-hairline-soft bg-canvas/90 px-4 backdrop-blur"
+  aria-label="Sections"
+>
+  <div class="flex gap-1 overflow-x-auto py-2">
+    {
+      sections.map((section) => (
+        <a
+          href={`#${section.id}`}
+          data-section-link={section.id}
+          class="shrink-0 rounded-full px-3 py-1.5 text-[14px] pointer-coarse:py-2.5 leading-5 text-mute transition-colors hover:bg-soft hover:text-ink"
+        >
+          {section.label}
+        </a>
+      ))
+    }
+  </div>
+</nav>
+
+<script>
+  const links = document.querySelectorAll<HTMLAnchorElement>(
+    "[data-section-link]",
+  );
+  // Selected = surface lift, per {components.pricing-tab-selected}.
+  const ACTIVE = ["bg-lift", "font-medium", "text-ink"];
+
+  const targets = [...links]
+    .map((link) => document.getElementById(link.dataset.sectionLink!))
+    .filter((el): el is HTMLElement => el !== null);
+
+  function highlight(id: string) {
+    for (const link of links) {
+      const isCurrent = link.dataset.sectionLink === id;
+      for (const cls of ACTIVE) link.classList.toggle(cls, isCurrent);
+      link.classList.toggle("text-mute", !isCurrent);
+    }
+  }
+
+  // rootMargin pulls the trigger line to just under the sticky nav, so a
+  // section counts as current the moment its heading clears the bar.
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (visible) highlight(visible.target.id);
+    },
+    { rootMargin: "-64px 0px -70% 0px", threshold: 0 },
+  );
+
+  for (const target of targets) observer.observe(target);
+</script>

@@ -1,0 +1,223 @@
+---
+import Logo from "./Logo.astro";
+import Button from "../ui/Button.astro";
+import Avatar from "../ui/Avatar.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+import type { Member } from "../../lib/types";
+import { memberAvatar } from "../../lib/files";
+
+interface Props {
+  member: Member | null;
+  isAdmin: boolean;
+}
+
+const { member, isAdmin } = Astro.props;
+const path = Astro.url.pathname;
+
+const links = [
+  { href: "/", label: "News" },
+  { href: "/players", label: "Players" },
+  { href: "/tournaments", label: "Tournaments" },
+  { href: "/book", label: "Book a court" },
+  { href: "/join", label: "Membership" },
+];
+
+const isCurrent = (href: string) =>
+  href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+
+const avatarUrl = member ? memberAvatar(member, "100x100") : null;
+---
+
+{
+  /* {components.top-nav}: a sticky 56px bar on the canvas with a hairline
+     underneath. Linear's nav links are plain text that resolve to ink on
+     hover — not tabs, and never bordered pills. */
+}
+<header
+  class="sticky top-0 z-40 border-b border-hairline-soft bg-canvas/85 backdrop-blur-md"
+>
+  <nav
+    class="shell flex h-14 items-center justify-between gap-4"
+    aria-label="Main"
+  >
+    <div class="flex min-w-0 items-center gap-5">
+      <Logo
+        labelClass="hidden sm:inline"
+        class="min-h-10 pointer-coarse:min-h-11"
+      />
+
+      <ul class="hidden items-center gap-1 md:flex">
+        {
+          links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-current={isCurrent(link.href) ? "page" : undefined}
+                class:list={[
+                  "inline-flex rounded-md px-2.5 py-1.5 text-[14px] leading-5 transition-colors hover:text-ink",
+                  isCurrent(link.href) ? "text-ink" : "text-mute",
+                ]}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <div class="flex shrink-0 items-center gap-2">
+      {
+        /* Below md the toggle lives in the drawer — the row has no space for it. */
+      }
+      <div class="hidden md:block">
+        <ThemeToggle />
+      </div>
+
+      {
+        member ? (
+          <>
+            {isAdmin && (
+              <Button
+                href="/admin"
+                variant="ghost"
+                size="sm"
+                class="hidden sm:inline-flex"
+              >
+                Admin
+              </Button>
+            )}
+            <a
+              href="/dashboard"
+              class="flex items-center gap-2 rounded-md py-1 pl-1 pr-3 transition-colors hover:bg-soft"
+            >
+              <Avatar name={member.name} src={avatarUrl} size="sm" />
+              <span class="hidden text-[14px] font-medium leading-5 text-ink sm:inline">
+                {member.name.split(" ")[0]}
+              </span>
+            </a>
+          </>
+        ) : (
+          <>
+            <Button
+              href="/login"
+              variant="ghost"
+              size="sm"
+              class="hidden sm:inline-flex"
+            >
+              Log in
+            </Button>
+            <Button href="/join" variant="primary" size="sm">
+              Join the club
+            </Button>
+          </>
+        )
+      }
+
+      {/* Held at 44px so the mobile toggle clears the touch-target floor. */}
+      <button
+        type="button"
+        id="nav-toggle"
+        aria-expanded="false"
+        aria-controls="nav-mobile"
+        class="grid size-10 place-items-center rounded-md border border-hairline bg-elevated text-ink transition-colors hover:bg-soft md:hidden"
+      >
+        <span class="sr-only">Toggle menu</span>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          aria-hidden="true"
+        >
+          <path d="M2 4h12M2 8h12M2 12h12" stroke-linecap="round"></path>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  {
+    /* Below md the category links get their own row rather than hiding behind
+      the toggle — they are the site's primary navigation, so they stay on
+      screen. The strip scrolls horizontally when the labels outrun the
+      viewport; min-w-0 keeps that scroll inside the strip. */
+  }
+  <div class="border-t border-hairline-soft md:hidden">
+    <ul class="shell flex min-w-0 gap-1 overflow-x-auto py-1.5">
+      {
+        links.map((link) => (
+          <li class="shrink-0">
+            <a
+              href={link.href}
+              aria-current={isCurrent(link.href) ? "page" : undefined}
+              class:list={[
+                "block whitespace-nowrap rounded-md px-3 py-1.5 text-[14px] leading-5 transition-colors pointer-coarse:py-2.5",
+                isCurrent(link.href)
+                  ? "bg-lift font-medium text-ink"
+                  : "text-mute",
+              ]}
+            >
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+
+  {
+    /* The drawer keeps only what the two rows above cannot hold: account
+      actions and the theme control. */
+  }
+  <div
+    id="nav-mobile"
+    hidden
+    class="border-t border-hairline-soft bg-elevated md:hidden"
+  >
+    <ul class="shell flex flex-col gap-1 py-3">
+      {
+        isAdmin && (
+          <li>
+            <a
+              href="/admin"
+              class="block rounded-md px-3 py-2 text-[14px] font-medium leading-5 text-ink"
+            >
+              Admin
+            </a>
+          </li>
+        )
+      }
+      {
+        !member && (
+          <li>
+            <a
+              href="/login"
+              class="block rounded-md px-3 py-2 text-[14px] font-medium leading-5 text-ink sm:hidden"
+            >
+              Log in
+            </a>
+          </li>
+        )
+      }
+      <li
+        class="mt-1 flex items-center justify-between gap-3 border-t border-hairline-soft px-3 pt-3"
+      >
+        <span class="text-[14px] leading-5 text-mute">Theme</span>
+        <ThemeToggle />
+      </li>
+    </ul>
+  </div>
+</header>
+
+<script>
+  const toggle = document.getElementById("nav-toggle");
+  const menu = document.getElementById("nav-mobile");
+
+  toggle?.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!open));
+    if (menu) menu.hidden = open;
+  });
+</script>

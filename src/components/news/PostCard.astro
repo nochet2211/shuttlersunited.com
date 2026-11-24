@@ -1,0 +1,169 @@
+---
+/**
+ * A story in the feed. Three densities, one component, because they differ only
+ * in how much of the same record they show:
+ *
+ * feature — the pinned lead. Category-tinted panel, full-bleed cover, hero type.
+ * row     — the feed. Thumbnail beside a card title.
+ * compact — the rail and "more news". Title and meta, no image.
+ *
+ * The category carries a hue (Deviation 6). That is taxonomy colour, not
+ * product-state colour: the tint and its label come from the `cat-*` ladder,
+ * which is separate from success/warning/error and safe on a public page.
+ */
+import Badge from "../ui/Badge.astro";
+import {
+  CATEGORY_BADGE,
+  CATEGORY_DOT,
+  categoryLabel,
+  categoryVars,
+  postCover,
+  timeAgo,
+} from "../../lib/news";
+import type { Post } from "../../lib/types";
+
+interface Props {
+  post: Post;
+  variant?: "feature" | "row" | "compact";
+  class?: string;
+}
+
+const { post, variant = "row", class: className } = Astro.props;
+
+const href = `/news/${post.slug}`;
+// The lead story earns a real image; the feed rows stay on thumbnails.
+const cover = postCover(post, variant === "feature" ? "1200x630" : "400x300");
+const published = timeAgo(post.published_at);
+const label = categoryLabel(post.category);
+const vars = categoryVars(post.category);
+const badge = CATEGORY_BADGE[post.category];
+const dot = CATEGORY_DOT[post.category];
+---
+
+{
+  variant === "feature" && (
+    <article class={className} style={vars}>
+      <a
+        href={href}
+        class="group card-feature block transition-shadow hover:shadow-lg"
+      >
+        {cover && (
+          <img
+            src={cover}
+            alt=""
+            width="1200"
+            height="630"
+            class="aspect-[2/1] w-full object-cover sm:aspect-[2.4/1]"
+          />
+        )}
+
+        <div class="flex flex-col gap-3 p-6 md:p-7">
+          <div class="flex flex-wrap items-center gap-2">
+            <Badge tone="bare" class={badge}>
+              {label}
+            </Badge>
+            <Badge tone="ink">Top story</Badge>
+            <time
+              datetime={post.published_at}
+              class="text-[13px] leading-5 text-mute"
+            >
+              {published}
+            </time>
+          </div>
+
+          <h2 class="heading-lg text-ink group-hover:underline">
+            {post.title}
+          </h2>
+
+          <p class="subtitle-md max-w-[68ch] text-body">{post.summary}</p>
+
+          {post.source_name && (
+            <p class="text-[13px] leading-5 text-mute">
+              Source · {post.source_name}
+            </p>
+          )}
+        </div>
+      </a>
+    </article>
+  )
+}
+
+{
+  variant === "row" && (
+    <article class={className} style={vars}>
+      <a
+        href={href}
+        class="group card relative flex flex-col gap-4 overflow-hidden p-5 pl-6 transition-shadow hover:shadow-md sm:flex-row sm:items-start"
+      >
+        {/* The category spine — the one mark that makes a column of otherwise
+            identical rows scannable by kind. */}
+        <span
+          aria-hidden="true"
+          class:list={["absolute inset-y-0 left-0 w-[3px]", dot]}
+        />
+
+        {cover && (
+          <img
+            src={cover}
+            alt=""
+            width="400"
+            height="300"
+            loading="lazy"
+            class="aspect-[4/3] w-full shrink-0 rounded-md border border-hairline-soft object-cover sm:w-40"
+          />
+        )}
+
+        <div class="flex min-w-0 flex-col gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <Badge tone="bare" class={badge}>
+              {label}
+            </Badge>
+            <time
+              datetime={post.published_at}
+              class="text-[13px] leading-5 text-faint"
+            >
+              {published}
+            </time>
+          </div>
+
+          <h2 class="heading-md text-ink group-hover:underline">
+            {post.title}
+          </h2>
+
+          <p class="text-[14px] leading-[1.5] text-mute">{post.summary}</p>
+
+          {post.source_name && (
+            <p class="text-[13px] leading-5 text-faint">
+              Source · {post.source_name}
+            </p>
+          )}
+        </div>
+      </a>
+    </article>
+  )
+}
+
+{
+  variant === "compact" && (
+    <a
+      href={href}
+      class:list={[
+        "group flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-soft",
+        className,
+      ]}
+    >
+      <span
+        aria-hidden="true"
+        class:list={["mt-[7px] size-1.5 shrink-0 rounded-full", dot]}
+      />
+      <span class="flex min-w-0 flex-col gap-1">
+        <span class="text-[14px] font-medium leading-5 text-ink group-hover:underline">
+          {post.title}
+        </span>
+        <span class="text-[12px] leading-4 text-faint">
+          {label} · {published}
+        </span>
+      </span>
+    </a>
+  )
+}

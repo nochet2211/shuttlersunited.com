@@ -1,0 +1,133 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Button from "../../components/ui/Button.astro";
+import Empty from "../../components/ui/Empty.astro";
+import { actions } from "astro:actions";
+import { listBookingsFor } from "../../lib/queries";
+import { shortDate, minuteToTime, dateKey } from "../../lib/format";
+
+const member = Astro.locals.member!;
+const all = await listBookingsFor(member.id);
+
+const today = dateKey();
+const isUpcoming = (date: string) => date.slice(0, 10) >= today;
+
+const upcoming = all
+  .filter((b) => b.status === "confirmed" && isUpcoming(b.date))
+  .sort(
+    (a, b) => a.date.localeCompare(b.date) || a.start_minute - b.start_minute,
+  );
+
+// Anything finished or cancelled, newest first.
+const past = all
+  .filter((b) => b.status !== "confirmed" || !isUpcoming(b.date))
+  .sort(
+    (a, b) => b.date.localeCompare(a.date) || b.start_minute - a.start_minute,
+  );
+---
+
+<AppLayout
+  section="member"
+  title="My bookings"
+  eyebrow="Court time"
+  heading="My bookings"
+  description="Everything you have reserved, and everything you have played."
+>
+  <div class="flex flex-col gap-8">
+    <section>
+      <div class="mb-4 flex items-center justify-between gap-4">
+        <h2 class="heading-md">Upcoming</h2>
+        <Button href="/book" variant="primary" size="sm">Book a court</Button>
+      </div>
+
+      {
+        upcoming.length === 0 ? (
+          <Empty title="Nothing booked">
+            Courts open two weeks ahead. Grab a slot before someone else does.
+            <Button
+              slot="action"
+              href="/book"
+              variant="secondary"
+              size="sm"
+              class="mt-4"
+            >
+              Open the calendar
+            </Button>
+          </Empty>
+        ) : (
+          <ul class="divide-y divide-hairline-soft rounded-lg border border-hairline-soft bg-elevated">
+            {upcoming.map((booking) => (
+              <li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[14px] font-medium leading-5 text-ink">
+                    {booking.expand?.court?.name ?? "Court"}
+                    {booking.expand?.court?.venue && (
+                      <span class="font-normal text-mute">
+                        {" "}
+                        · {booking.expand.court.venue}
+                      </span>
+                    )}
+                  </span>
+                  <span class="text-[12px] leading-4 text-mute">
+                    {shortDate(booking.date)} ·{" "}
+                    {minuteToTime(booking.start_minute)}–
+                    {minuteToTime(booking.end_minute)}
+                  </span>
+                  {booking.notes && (
+                    <span class="text-[12px] leading-4 text-faint">
+                      {booking.notes}
+                    </span>
+                  )}
+                </div>
+
+                <form
+                  method="POST"
+                  action={actions.bookings.cancel}
+                  class="shrink-0"
+                >
+                  <input type="hidden" name="id" value={booking.id} />
+                  <button
+                    type="submit"
+                    class="rounded-md border border-hairline px-3 py-1.5 text-[12px] leading-4 text-body transition-colors hover:border-error/30 hover:text-error"
+                  >
+                    Cancel booking
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+
+    {
+      past.length > 0 && (
+        <section>
+          <h2 class="heading-md mb-4">Past & cancelled</h2>
+          <ul class="divide-y divide-hairline-soft rounded-lg border border-hairline-soft bg-elevated">
+            {past.slice(0, 20).map((booking) => (
+              <li class="flex items-center justify-between gap-4 px-5 py-3">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[14px] leading-5 text-body">
+                    {booking.expand?.court?.name ?? "Court"}
+                  </span>
+                  <span class="text-[12px] leading-4 text-faint">
+                    {shortDate(booking.date)} ·{" "}
+                    {minuteToTime(booking.start_minute)}–
+                    {minuteToTime(booking.end_minute)}
+                  </span>
+                </div>
+                <Badge
+                  tone={booking.status === "cancelled" ? "error" : "neutral"}
+                >
+                  {booking.status === "cancelled" ? "Cancelled" : "Played"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </div>
+</AppLayout>

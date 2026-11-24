@@ -1,0 +1,242 @@
+---
+/**
+ * The story editor, shared by "new" and "edit" so the two can't drift. Which
+ * action it posts to is the only difference between them.
+ *
+ * Bodies are plain text on purpose — see lib/news.ts. The hint under the field
+ * is the whole syntax.
+ */
+import { actions } from "astro:actions";
+import Button from "../ui/Button.astro";
+import { CATEGORY_ORDER, categoryLabel } from "../../lib/news";
+import type { Post, Tournament } from "../../lib/types";
+
+interface Props {
+  mode: "create" | "edit";
+  post?: Post;
+  tournaments: Tournament[];
+}
+
+const { mode, post, tournaments } = Astro.props;
+
+const inputClass =
+  "w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] tracking-[-0.05px] text-ink placeholder:text-faint focus:outline-2 focus:outline-offset-0 focus:outline-focus/50";
+const lineClass = `${inputClass} h-10 pointer-coarse:h-11`;
+const areaClass = `${inputClass} py-2.5`;
+const labelClass = "label-sm text-body";
+
+/** A datetime-local value: "2026-08-30T09:00". */
+const localDateTime = (value?: string) => {
+  const date = value ? new Date(value) : new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+};
+---
+
+<form
+  method="POST"
+  enctype="multipart/form-data"
+  action={mode === "create" ? actions.news.createPost : actions.news.updatePost}
+  class="flex flex-col gap-5"
+>
+  {mode === "edit" && <input type="hidden" name="id" value={post?.id} />}
+
+  {/* --------------------------------------------------------------- copy */}
+  <div class="flex flex-col gap-1.5">
+    <label for="title" class={labelClass}
+      >Headline <span class="text-error">*</span></label
+    >
+    <input
+      id="title"
+      name="title"
+      required
+      maxlength="160"
+      value={post?.title}
+      placeholder="Club Championship draw is published on 12 September"
+      class={lineClass}
+    />
+    <p class="text-[12px] leading-[1.4] text-mute">
+      The URL is generated from this. Changing it on a published story changes
+      the link.
+    </p>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div class="flex flex-col gap-1.5">
+      <label for="category" class={labelClass}
+        >Category <span class="text-error">*</span></label
+      >
+      <select id="category" name="category" required class={lineClass}>
+        {
+          CATEGORY_ORDER.map((category) => (
+            <option value={category} selected={post?.category === category}>
+              {categoryLabel(category)}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="published_at" class={labelClass}>Published</label>
+      <input
+        id="published_at"
+        name="published_at"
+        type="datetime-local"
+        value={localDateTime(post?.published_at)}
+        class={lineClass}
+      />
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-1.5">
+    <label for="summary" class={labelClass}
+      >Summary <span class="text-error">*</span></label
+    >
+    <textarea
+      id="summary"
+      name="summary"
+      required
+      rows="3"
+      maxlength="400"
+      placeholder="One or two lines. This is what shows in the feed."
+      class={areaClass}>{post?.summary}</textarea
+    >
+    <p class="text-[12px] leading-[1.4] text-mute">
+      The feed shows this, never a truncated body — so write the teaser.
+    </p>
+  </div>
+
+  <div class="flex flex-col gap-1.5">
+    <label for="body" class={labelClass}>Story</label>
+    <textarea
+      id="body"
+      name="body"
+      rows="16"
+      maxlength="20000"
+      placeholder={"The opening paragraph.\n\n## A subheading\n\n- A bullet\n- Another bullet"}
+      class={`${areaClass} font-mono text-[14px]`}>{post?.body}</textarea
+    >
+    <p class="text-[12px] leading-[1.4] text-mute">
+      Plain text. A blank line starts a paragraph, <code class="mono-token"
+        >##</code
+      >
+      makes a subheading, <code class="mono-token">-</code> makes a bullet. No HTML.
+    </p>
+  </div>
+
+  {/* -------------------------------------------------------------- cover */}
+  <div class="flex flex-col gap-1.5">
+    <label for="cover" class={labelClass}>Cover image</label>
+    <input
+      id="cover"
+      name="cover"
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      class="text-[14px] leading-5 text-mute file:mr-3 file:rounded-md file:border file:border-hairline file:bg-elevated file:px-3 file:py-1.5 file:label-sm file:text-ink"
+    />
+    <p class="text-[12px] leading-[1.4] text-mute">
+      Landscape, roughly 2:1, under 5 MB.
+      {post?.cover ? " Leave empty to keep the current image." : ""}
+    </p>
+  </div>
+
+  {/* ------------------------------------------------------------ sources */}
+  <fieldset
+    class="flex flex-col gap-4 rounded-lg border border-hairline-soft p-4"
+  >
+    <legend
+      class="px-1 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+    >
+      Attribution
+    </legend>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="flex flex-col gap-1.5">
+        <label for="source_name" class={labelClass}>Source</label>
+        <input
+          id="source_name"
+          name="source_name"
+          maxlength="120"
+          value={post?.source_name}
+          placeholder="Badminton Association of India"
+          class={lineClass}
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="source_url" class={labelClass}>Source link</label>
+        <input
+          id="source_url"
+          name="source_url"
+          type="url"
+          value={post?.source_url}
+          placeholder="https://www.badmintonindia.org/…"
+          class={lineClass}
+        />
+      </div>
+    </div>
+
+    <p class="text-[12px] leading-[1.4] text-mute">
+      Fill these in for anything the club did not write — a circular from an
+      association is credited and linked, never presented as ours.
+    </p>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="tournament" class={labelClass}>Related fixture</label>
+      <select id="tournament" name="tournament" class={lineClass}>
+        <option value="">None</option>
+        {
+          tournaments.map((fixture) => (
+            <option
+              value={fixture.id}
+              selected={post?.tournament === fixture.id}
+            >
+              {fixture.name}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+  </fieldset>
+
+  {/* ---------------------------------------------------------- publishing */}
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+      <div class="flex flex-col gap-1.5">
+        <label for="status" class={labelClass}>Status</label>
+        <select id="status" name="status" class={lineClass}>
+          <option value="draft" selected={post?.status !== "published"}
+            >Draft</option
+          >
+          <option value="published" selected={post?.status === "published"}>
+            Published
+          </option>
+        </select>
+      </div>
+
+      <label
+        class="flex min-h-10 items-center gap-2.5 text-[14px] leading-5 text-body"
+      >
+        <input
+          type="checkbox"
+          name="is_pinned"
+          value="true"
+          checked={post?.is_pinned}
+          class="size-4 rounded-sm border-hairline accent-primary"
+        />
+        Pin as the top story
+      </label>
+    </div>
+
+    <div class="flex gap-2">
+      <Button href="/admin/news" variant="ghost">Cancel</Button>
+      <Button type="submit">
+        {mode === "create" ? "Create story" : "Save changes"}
+      </Button>
+    </div>
+  </div>
+</form>

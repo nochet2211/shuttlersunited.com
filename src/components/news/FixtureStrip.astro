@@ -1,0 +1,110 @@
+---
+/**
+ * The "what's on" band that opens the home page — the first thing a visitor
+ * should be able to answer without scrolling: is anything happening right now,
+ * and what is next?
+ *
+ * Live matches take the strip when there are any; otherwise it degrades to the
+ * fixture list. A "Live" state would ordinarily want red, but the state palette
+ * is a product-surface token (DESIGN.md, Deviation 3) and this is a public
+ * page — so live reads as the inverted ink chip, which is the strongest
+ * emphasis the system allows here without introducing a second hue.
+ */
+import Badge from "../ui/Badge.astro";
+import { fixtureTiming, dateRange } from "../../lib/news";
+import type { Match, Tournament } from "../../lib/types";
+
+interface Props {
+  ongoing: Tournament[];
+  upcoming: Tournament[];
+  live: Match[];
+}
+
+const { ongoing, upcoming, live } = Astro.props;
+
+// One row of fixtures, on-now first, capped so the strip never wraps into a
+// second block of content.
+const fixtures = [...ongoing, ...upcoming].slice(0, 4);
+
+const scoreline = (match: Match) =>
+  (match.scores ?? []).map(([a, b]) => `${a}-${b}`).join(", ");
+---
+
+{
+  (fixtures.length > 0 || live.length > 0) && (
+    <section
+      aria-label="What's on"
+      class="border-b border-hairline-soft bg-soft"
+    >
+      <div class="shell flex flex-col gap-3 py-3">
+        {live.length > 0 && (
+          <div class="flex min-w-0 items-start gap-3 overflow-x-auto">
+            <span class="sticky left-0 shrink-0 pt-[3px]">
+              <Badge tone="ink">
+                <span
+                  class="inline-block size-1.5 rounded-full bg-current"
+                  aria-hidden="true"
+                />
+                Live
+              </Badge>
+            </span>
+
+            <ul class="flex min-w-0 items-center gap-2">
+              {live.map((match) => (
+                <li class="shrink-0">
+                  <a
+                    href={`/tournaments/${match.expand?.tournament?.slug ?? ""}`}
+                    class="flex items-baseline gap-2 rounded-md border border-hairline-soft bg-elevated px-3 py-1.5 transition-colors hover:border-hairline"
+                  >
+                    <span class="text-[13px] leading-5 text-ink">
+                      {match.side_a_name} v {match.side_b_name}
+                    </span>
+                    <span class="mono-token text-body">
+                      {scoreline(match) || match.round}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {fixtures.length > 0 && (
+          <div class="flex min-w-0 items-center gap-3 overflow-x-auto">
+            <span class="shrink-0 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+              Fixtures
+            </span>
+
+            <ul class="flex min-w-0 items-center gap-1">
+              {fixtures.map((fixture) => (
+                <li class="shrink-0">
+                  <a
+                    href={`/tournaments/${fixture.slug}`}
+                    class="flex items-baseline gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 transition-colors hover:bg-lift"
+                  >
+                    <span class="text-[13px] font-medium leading-5 text-ink">
+                      {fixture.name}
+                    </span>
+                    <span class="text-[13px] leading-5 text-mute">
+                      {fixtureTiming(fixture.start_date, fixture.end_date)}
+                    </span>
+                    <span class="hidden text-[13px] leading-5 text-faint md:inline">
+                      {dateRange(fixture.start_date, fixture.end_date)}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+
+            <a
+              href="/tournaments"
+              class="ml-auto hidden shrink-0 whitespace-nowrap px-2 text-[13px] font-medium leading-5 text-link hover:text-link-deep sm:inline"
+            >
+              All fixtures →
+            </a>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}

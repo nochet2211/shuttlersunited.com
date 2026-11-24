@@ -1,0 +1,36 @@
+---
+import AppLayout from "../../../layouts/AppLayout.astro";
+import Card from "../../../components/ui/Card.astro";
+import Alert from "../../../components/ui/Alert.astro";
+import StoryForm from "../../../components/news/StoryForm.astro";
+import { actions } from "astro:actions";
+import { listTournaments } from "../../../lib/queries";
+import { actionMessage } from "../../../lib/action-error";
+
+const result = Astro.getActionResult(actions.news.createPost);
+
+// A successful create sends the editor back to the desk. Without the redirect
+// a refresh would re-post the form and file the story twice.
+if (result && !result.error) {
+  return Astro.redirect("/admin/news");
+}
+
+const tournaments = await listTournaments();
+const error = actionMessage(result?.error);
+---
+
+<AppLayout
+  section="admin"
+  title="New story"
+  eyebrow="Newsroom"
+  heading="New story"
+  description="Save it as a draft to work on it, or publish straight to the home page."
+>
+  <div class="flex flex-col gap-5">
+    {error && <Alert>{error}</Alert>}
+
+    <Card padding="lg">
+      <StoryForm mode="create" tournaments={tournaments} />
+    </Card>
+  </div>
+</AppLayout>

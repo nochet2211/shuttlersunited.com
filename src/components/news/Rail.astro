@@ -1,0 +1,63 @@
+---
+/**
+ * A sidebar block: caption header, optional link, content. Same header
+ * treatment as the admin panels, so the two surfaces read as one system.
+ *
+ * `accent` tints the header strip and the rule beneath it. A rail of four
+ * panels with four identical grey headers is the thing that made this page
+ * read as one undifferentiated column, so each block now carries a hue.
+ */
+import Card from "../ui/Card.astro";
+
+interface Props {
+  title: string;
+  href?: string;
+  linkLabel?: string;
+  /** Full-strength hue utility, e.g. `bg-cat-tournament`. */
+  accent?: string;
+  /** Matching tint fill for the header strip, e.g. `bg-cat-tournament-tint`. */
+  accentTint?: string;
+  class?: string;
+}
+
+const {
+  title,
+  href,
+  linkLabel = "See all",
+  accent,
+  accentTint,
+  class: className,
+} = Astro.props;
+---
+
+<Card padding="none" class:list={["overflow-hidden", className]}>
+  <div
+    class:list={[
+      "flex items-center justify-between gap-3 px-4 py-3",
+      accentTint ?? "bg-soft",
+    ]}
+  >
+    <h2
+      class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-ink"
+    >
+      {title}
+    </h2>
+    {
+      href && (
+        <a
+          href={href}
+          class="shrink-0 text-[12px] font-medium leading-4 text-link hover:text-link-deep"
+        >
+          {linkLabel} →
+        </a>
+      )
+    }
+  </div>
+  {/* The hue reads as a spine under the header rather than a full border. */}
+  <div
+    aria-hidden="true"
+    class:list={["h-[2px]", accent ?? "bg-hairline-soft"]}
+  >
+  </div>
+  <slot />
+</Card>

@@ -1,0 +1,328 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Card from "../../components/ui/Card.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Avatar from "../../components/ui/Avatar.astro";
+import Eyebrow from "../../components/ui/Eyebrow.astro";
+import Button from "../../components/ui/Button.astro";
+import {
+  getMemberBySlug,
+  listGearFor,
+  listEntriesFor,
+} from "../../lib/queries";
+import { memberAvatar } from "../../lib/files";
+import { age, shortDate } from "../../lib/format";
+import type { TournamentResult } from "../../lib/types";
+
+const { slug } = Astro.params;
+const member = slug ? await getMemberBySlug(slug) : null;
+
+// A private profile is indistinguishable from a missing one, unless it's your
+// own or you're an admin.
+const viewer = Astro.locals.member;
+const mayView =
+  member &&
+  (member.is_public || viewer?.id === member.id || Astro.locals.isAdmin);
+
+if (!member || !mayView) {
+  return new Response(null, { status: 404, statusText: "Not found" });
+}
+
+const [gear, entries] = await Promise.all([
+  listGearFor(member.id),
+  listEntriesFor(member.id),
+]);
+
+const currentGear = gear.filter((item) => item.is_current);
+const podium: TournamentResult[] = ["winner", "runner-up", "semi-final"];
+const accolades = entries.filter((entry) => podium.includes(entry.result));
+const titles = entries.filter((entry) => entry.result === "winner").length;
+
+const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
+
+const resultLabels: Record<TournamentResult, string> = {
+  winner: "Winner",
+  "runner-up": "Runner-up",
+  "semi-final": "Semi-finalist",
+  "quarter-final": "Quarter-finalist",
+  "round-of-16": "Round of 16",
+  "group-stage": "Group stage",
+  participated: "Participated",
+};
+
+const resultTone = (result: TournamentResult) =>
+  result === "winner" ? "ink" : result === "runner-up" ? "accent" : "neutral";
+
+// Only render a row when there is something in it — an empty"—" grid reads as
+// broken rather than sparse.
+const vitals = [
+  member.date_of_birth && {
+    label: "Age",
+    value: `${age(member.date_of_birth)}`,
+  },
+  member.gender && { label: "Category", value: titleCase(member.gender) },
+  member.height_cm && { label: "Height", value: `${member.height_cm} cm` },
+  member.handedness && {
+    label: "Plays",
+    value: `${titleCase(member.handedness)}-handed`,
+  },
+  member.play_style && { label: "Style", value: titleCase(member.play_style) },
+  member.skill_level && {
+    label: "Level",
+    value: titleCase(member.skill_level),
+  },
+  member.city && { label: "Based in", value: member.city },
+  member.joined_on && {
+    label: "Member since",
+    value: shortDate(member.joined_on),
+  },
+].filter(Boolean) as { label: string; value: string }[];
+
+const isOwnProfile = viewer?.id === member.id;
+---
+
+<Layout
+  title={member.name}
+  description={member.bio || `${member.name} plays for Shuttlers United.`}
+>
+  <div class="shell">
+    <a
+      href="/players"
+      class="text-[14px] leading-5 text-mute transition-colors hover:text-ink"
+    >
+      ← All players
+    </a>
+
+    {/* ------------------------------------------------------------- header */}
+    <header
+      class="mt-6 flex flex-col gap-6 border-b border-hairline-soft pb-10 sm:flex-row sm:items-start sm:gap-8"
+    >
+      <Avatar
+        name={member.name}
+        src={memberAvatar(member, "400x400")}
+        size="xl"
+      />
+
+      <div class="flex flex-1 flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          {
+            member.jersey_number != null && (
+              <Eyebrow>Squad no. {member.jersey_number}</Eyebrow>
+            )
+          }
+          <h1 class="display-lg text-ink">
+            {member.name}
+          </h1>
+        </div>
+
+        {
+          member.bio && (
+            <p class="max-w-2xl text-[16px] leading-6 text-body">
+              {member.bio}
+            </p>
+          )
+        }
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          {
+            member.preferred_events?.map((event) => (
+              <Badge tone="neutral">{event}</Badge>
+            ))
+          }
+          {
+            titles > 0 && (
+              <Badge tone="ink">
+                {titles} {titles === 1 ? "title" : "titles"}
+              </Badge>
+            )
+          }
+          {!member.is_public && <Badge tone="warning">Private profile</Badge>}
+        </div>
+      </div>
+
+      {
+        isOwnProfile && (
+          <Button
+            href="/dashboard/profile"
+            variant="secondary"
+            size="sm"
+            class="shrink-0"
+          >
+            Edit profile
+          </Button>
+        )
+      }
+    </header>
+
+    <div class="grid gap-8 py-10 lg:grid-cols-[1fr_340px]">
+      {
+        /* ------------------------------------------------------- accolades
+          min-w-0: the record table carries a 560px min-width inside its
+          scroller, and without this the grid item's automatic minimum size
+          adopts it and widens the whole mobile column. */
+      }
+      <div class="flex min-w-0 flex-col gap-10">
+        <section>
+          <div class="mb-4 flex items-baseline justify-between gap-4">
+            <h2 class="heading-md">Tournament record</h2>
+            <span
+              class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]"
+            >
+              {entries.length}{" "}
+              {entries.length === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+
+          {
+            entries.length === 0 ? (
+              <Card padding="lg">
+                <p class="text-[14px] leading-5 text-mute">
+                  No tournament entries recorded yet.
+                </p>
+              </Card>
+            ) : (
+              <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
+                <table class="w-full min-w-[560px] border-collapse text-left">
+                  <thead>
+                    <tr class="border-b border-hairline-soft">
+                      {["Tournament", "Event", "Partner", "Result"].map(
+                        (heading) => (
+                          <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                            {heading}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry) => {
+                      const tournament = entry.expand?.tournament;
+                      const partner =
+                        entry.expand?.partner?.name ?? entry.partner_name;
+                      return (
+                        <tr class="border-b border-hairline-soft last:border-0">
+                          <td class="px-4 py-3">
+                            {tournament ? (
+                              <a
+                                href={`/tournaments/${tournament.slug}`}
+                                class="text-[14px] leading-5 text-ink hover:underline"
+                              >
+                                {tournament.name}
+                              </a>
+                            ) : (
+                              <span class="text-[14px] leading-5 text-mute">
+                                —
+                              </span>
+                            )}
+                            {tournament && (
+                              <span class="block text-[12px] leading-4 text-faint">
+                                {shortDate(tournament.start_date)}
+                              </span>
+                            )}
+                          </td>
+                          <td class="px-4 py-3 text-[12px] leading-4 text-body">
+                            {entry.event}
+                          </td>
+                          <td class="px-4 py-3 text-[14px] leading-5 text-body">
+                            {partner || "—"}
+                          </td>
+                          <td class="px-4 py-3">
+                            <Badge tone={resultTone(entry.result)}>
+                              {resultLabels[entry.result]}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+        </section>
+
+        {
+          accolades.length > 0 && (
+            <section>
+              <h2 class="heading-md mb-4">Highlights</h2>
+              <div class="grid gap-3 sm:grid-cols-2">
+                {accolades.slice(0, 4).map((entry) => (
+                  <Card padding="md">
+                    <div class="flex flex-col gap-1.5">
+                      <Badge tone={resultTone(entry.result)} class="self-start">
+                        {resultLabels[entry.result]}
+                      </Badge>
+                      <p class="text-[14px] font-medium leading-5 text-ink">
+                        {entry.expand?.tournament?.name ?? "Tournament"}
+                      </p>
+                      <p class="text-[12px] leading-4 text-mute">
+                        {entry.event}
+                        {entry.expand?.tournament &&
+                          ` · ${shortDate(entry.expand.tournament.start_date)}`}
+                      </p>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )
+        }
+      </div>
+
+      {/* ------------------------------------------------- vitals and gear */}
+      <aside class="flex min-w-0 flex-col gap-6">
+        {
+          vitals.length > 0 && (
+            <Card padding="none">
+              <h2 class="border-b border-hairline-soft px-5 py-4 eyebrow">
+                Profile
+              </h2>
+              <dl class="divide-y divide-hairline-soft">
+                {vitals.map((row) => (
+                  <div class="flex items-center justify-between gap-4 px-5 py-3">
+                    <dt class="text-[14px] leading-5 text-mute">{row.label}</dt>
+                    <dd class="text-[14px] font-medium leading-5 text-ink">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          )
+        }
+
+        <Card padding="none">
+          <h2 class="border-b border-hairline-soft px-5 py-4 eyebrow">
+            In the bag
+          </h2>
+
+          {
+            currentGear.length === 0 ? (
+              <p class="px-5 py-6 text-[14px] leading-5 text-mute">
+                No gear listed yet.
+              </p>
+            ) : (
+              <ul class="divide-y divide-hairline-soft">
+                {currentGear.map((item) => (
+                  <li class="flex flex-col gap-0.5 px-5 py-3">
+                    <span class="text-[12px] uppercase leading-4 text-faint tracking-[0.06em]">
+                      {item.category}
+                    </span>
+                    <span class="text-[14px] font-medium leading-5 text-ink">
+                      {item.brand} {item.model}
+                    </span>
+                    {item.spec && (
+                      <span class="text-[12px] leading-4 text-mute">
+                        {item.spec}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        </Card>
+      </aside>
+    </div>
+  </div>
+</Layout>

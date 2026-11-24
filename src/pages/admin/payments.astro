@@ -1,0 +1,265 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Card from "../../components/ui/Card.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Field from "../../components/ui/Field.astro";
+import Button from "../../components/ui/Button.astro";
+import Alert from "../../components/ui/Alert.astro";
+import Empty from "../../components/ui/Empty.astro";
+import { actions, isInputError } from "astro:actions";
+import { getAdminClient } from "../../lib/pocketbase";
+import { money, periodKey, periodLabel, shortDate } from "../../lib/format";
+import type { Member, Payment, PaymentStatus } from "../../lib/types";
+
+const result = Astro.getActionResult(actions.admin.recordManualPayment);
+const fieldErrors = isInputError(result?.error) ? result.error.fields : {};
+
+const pb = await getAdminClient();
+
+const [members, ledger] = await Promise.all([
+  pb
+    .collection("members")
+    .getFullList<Member>({ filter: 'status ="active"', sort: "name" }),
+  pb.collection("payments").getList<Payment>(1, 100, {
+    filter: 'status !="created"',
+    expand: "member",
+    sort: "-created",
+  }),
+]);
+
+const rows = ledger.items;
+
+// Reconciliation totals: what the gateway settled vs what came in offline.
+const gateway = rows.filter(
+  (row) => row.status === "paid" && row.razorpay_payment_id,
+);
+const offline = rows.filter(
+  (row) => row.status === "paid" && !row.razorpay_payment_id,
+);
+const gatewayTotal = gateway.reduce((sum, row) => sum + row.amount, 0);
+const offlineTotal = offline.reduce((sum, row) => sum + row.amount, 0);
+
+const statusTone: Record<
+  PaymentStatus,
+  "success" | "warning" | "error" | "neutral"
+> = {
+  paid: "success",
+  attempted: "warning",
+  created: "neutral",
+  failed: "error",
+  refunded: "neutral",
+};
+
+const selectClass =
+  "h-11 w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] text-ink focus:border-2 focus:border-focus focus:outline-none";
+---
+
+<AppLayout
+  section="admin"
+  title="Payments"
+  eyebrow="Club administration"
+  heading="Payment ledger"
+  description="Every transaction, and a way to record the ones that happened in cash."
+>
+  <div class="flex flex-col gap-6">
+    {/* --------------------------------------------------- reconciliation */}
+    <div class="grid gap-4 sm:grid-cols-3">
+      <Card padding="md">
+        <div class="flex flex-col gap-1">
+          <span class="heading-md text-ink">
+            {money(gatewayTotal)}
+          </span>
+          <span class="text-[12px] leading-4 text-mute">
+            Via Razorpay ({gateway.length})
+          </span>
+        </div>
+      </Card>
+      <Card padding="md">
+        <div class="flex flex-col gap-1">
+          <span class="heading-md text-ink">
+            {money(offlineTotal)}
+          </span>
+          <span class="text-[12px] leading-4 text-mute">
+            Recorded offline ({offline.length})
+          </span>
+        </div>
+      </Card>
+      <Card padding="md">
+        <div class="flex flex-col gap-1">
+          <span class="heading-md text-ink">
+            {money(gatewayTotal + offlineTotal)}
+          </span>
+          <span class="text-[12px] leading-4 text-mute">Total received</span>
+        </div>
+      </Card>
+    </div>
+
+    <p
+      class="rounded-md border border-hairline bg-soft px-3 py-2 text-[12px] leading-4 text-body"
+    >
+      The Razorpay column should match your merchant dashboard for the same
+      window. Each order carries the member id, name and dues period in its
+      notes, so a settlement report reconciles line by line.
+    </p>
+
+    {/* ----------------------------------------------------- record manual */}
+    <Card padding="lg">
+      <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-1">
+          <h2 class="heading-md">Record an offline payment</h2>
+          <p class="text-[14px] leading-5 text-mute">
+            For cash or direct UPI. These stay separate from gateway settlements
+            so reconciliation is never ambiguous.
+          </p>
+        </div>
+
+        {result?.data && <Alert tone="success">Payment recorded.</Alert>}
+        {
+          result?.error && !isInputError(result.error) && (
+            <Alert>{result.error.message}</Alert>
+          )
+        }
+
+        {
+          members.length === 0 ? (
+            <p class="text-[14px] leading-5 text-mute">
+              No active members yet.
+            </p>
+          ) : (
+            <form
+              method="POST"
+              action={actions.admin.recordManualPayment}
+              class="flex flex-col gap-4"
+            >
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="flex flex-col gap-1.5">
+                  <label for="member" class="label-sm text-ink">
+                    Member
+                  </label>
+                  <select
+                    id="member"
+                    name="member"
+                    class={selectClass}
+                    required
+                  >
+                    {members.map((member) => (
+                      <option value={member.id}>{member.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <Field
+                  label="Amount (₹)"
+                  name="amount_rupees"
+                  type="number"
+                  min={1}
+                  placeholder="800"
+                  required
+                  error={fieldErrors.amount_rupees?.join(" ")}
+                />
+
+                <Field
+                  label="Period"
+                  name="period"
+                  value={periodKey()}
+                  hint="YYYY-MM"
+                  error={fieldErrors.period?.join(" ")}
+                />
+
+                <div class="flex flex-col gap-1.5">
+                  <label for="method" class="label-sm text-ink">
+                    Method
+                  </label>
+                  <select
+                    id="method"
+                    name="method"
+                    class={selectClass}
+                    required
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI (direct)</option>
+                    <option value="bank-transfer">Bank transfer</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                </div>
+              </div>
+
+              <Field
+                label="Notes"
+                name="notes"
+                placeholder="Handed over at Friday session"
+              />
+
+              <Button type="submit" variant="primary" class="self-start">
+                Record payment
+              </Button>
+            </form>
+          )
+        }
+      </div>
+    </Card>
+
+    {/* -------------------------------------------------------- the ledger */}
+    <section>
+      <h2 class="heading-md mb-4">All transactions</h2>
+
+      {
+        rows.length === 0 ? (
+          <Empty title="No transactions yet">
+            Payments appear here as members settle their dues.
+          </Empty>
+        ) : (
+          <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
+            <table class="w-full min-w-[820px] border-collapse text-left">
+              <thead>
+                <tr class="border-b border-hairline-soft">
+                  {[
+                    "Member",
+                    "Period",
+                    "Amount",
+                    "Method",
+                    "Paid",
+                    "Razorpay ref",
+                    "Status",
+                  ].map((heading) => (
+                    <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr class="border-b border-hairline-soft last:border-0">
+                    <td class="px-4 py-3 text-[14px] leading-5 text-ink">
+                      {row.expand?.member?.name ?? "—"}
+                    </td>
+                    <td class="px-4 py-3 text-[14px] leading-5 text-body">
+                      {row.period ? periodLabel(row.period) : "—"}
+                    </td>
+                    <td class="px-4 py-3 text-[14px] font-medium leading-5 text-ink">
+                      {money(row.amount)}
+                    </td>
+                    <td class="px-4 py-3 text-[14px] leading-5 text-body">
+                      {row.method || "—"}
+                    </td>
+                    <td class="px-4 py-3 text-[12px] leading-4 text-mute">
+                      {row.paid_at ? shortDate(row.paid_at) : "—"}
+                    </td>
+                    <td class="px-4 py-3 text-[12px] leading-4 text-faint">
+                      {row.razorpay_payment_id ||
+                        (row.status === "paid" ? "offline" : "—")}
+                    </td>
+                    <td class="px-4 py-3">
+                      <Badge tone={statusTone[row.status]}>{row.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</AppLayout>

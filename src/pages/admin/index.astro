@@ -1,0 +1,167 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Card from "../../components/ui/Card.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Avatar from "../../components/ui/Avatar.astro";
+import { getAdminClient } from "../../lib/pocketbase";
+import { memberAvatar } from "../../lib/files";
+import { money, periodKey, periodLabel, shortDate } from "../../lib/format";
+import type { Member, Payment } from "../../lib/types";
+
+const pb = await getAdminClient();
+const period = periodKey();
+
+const [activeMembers, paidThisMonth, recent] = await Promise.all([
+  pb
+    .collection("members")
+    .getFullList<Member>({ filter: 'status ="active"', sort: "name" }),
+  pb.collection("payments").getFullList<Payment>({
+    filter: pb.filter(
+      'type ="membership" && period = {:period} && status ="paid"',
+      { period },
+    ),
+  }),
+  pb.collection("payments").getList<Payment>(1, 8, {
+    filter: 'status ="paid"',
+    expand: "member",
+    sort: "-paid_at",
+  }),
+]);
+
+const paidIds = new Set(paidThisMonth.map((payment) => payment.member));
+const outstanding = activeMembers.filter((member) => !paidIds.has(member.id));
+
+const collected = paidThisMonth.reduce(
+  (total, payment) => total + payment.amount,
+  0,
+);
+const collectionRate = activeMembers.length
+  ? Math.round((paidIds.size / activeMembers.length) * 100)
+  : 0;
+
+const tiles = [
+  { label: "Collected this month", value: money(collected) },
+  {
+    label: "Members settled",
+    value: `${paidIds.size} / ${activeMembers.length}`,
+  },
+  { label: "Collection rate", value: `${collectionRate}%` },
+  { label: "Outstanding", value: String(outstanding.length) },
+];
+---
+
+<AppLayout
+  section="admin"
+  title="Admin"
+  eyebrow="Club administration"
+  heading={`Dues for ${periodLabel(period)}`}
+  description="Who has paid, who hasn't, and what has settled through Razorpay."
+>
+  <div class="flex flex-col gap-6">
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {
+        tiles.map((tile) => (
+          <Card padding="md">
+            <div class="flex flex-col gap-1">
+              <span class="heading-md text-ink">{tile.value}</span>
+              <span class="text-[12px] leading-4 text-mute">{tile.label}</span>
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+
+    {/* ------------------------------------------------------- outstanding */}
+    <Card padding="none">
+      <div
+        class="flex items-center justify-between border-b border-hairline-soft px-5 py-4"
+      >
+        <h2 class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+          Outstanding this month
+        </h2>
+        <a
+          href="/admin/payments"
+          class="text-[12px] font-medium leading-4 text-link hover:text-link-deep"
+        >
+          Record a payment →
+        </a>
+      </div>
+
+      {
+        outstanding.length === 0 ? (
+          <p class="px-5 py-8 text-center text-[14px] leading-5 text-mute">
+            Everyone has settled. Nice.
+          </p>
+        ) : (
+          <ul class="divide-y divide-hairline-soft">
+            {outstanding.map((member) => (
+              <li class="flex items-center justify-between gap-4 px-5 py-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <Avatar
+                    name={member.name}
+                    src={memberAvatar(member, "100x100")}
+                    size="sm"
+                  />
+                  <div class="flex min-w-0 flex-col">
+                    <span class="truncate text-[14px] font-medium leading-5 text-ink">
+                      {member.name}
+                    </span>
+                    <span class="text-[12px] leading-4 text-mute">
+                      {member.phone}
+                    </span>
+                  </div>
+                </div>
+                <Badge tone="warning">Unpaid</Badge>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </Card>
+
+    {/* ----------------------------------------------------------- recent */}
+    <Card padding="none">
+      <div
+        class="flex items-center justify-between border-b border-hairline-soft px-5 py-4"
+      >
+        <h2 class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+          Recent settlements
+        </h2>
+        <a
+          href="/admin/payments"
+          class="text-[12px] font-medium leading-4 text-link hover:text-link-deep"
+        >
+          Full ledger →
+        </a>
+      </div>
+
+      {
+        recent.items.length === 0 ? (
+          <p class="px-5 py-8 text-center text-[14px] leading-5 text-mute">
+            No payments recorded yet.
+          </p>
+        ) : (
+          <ul class="divide-y divide-hairline-soft">
+            {recent.items.map((payment) => (
+              <li class="flex items-center justify-between gap-4 px-5 py-3">
+                <div class="flex min-w-0 flex-col">
+                  <span class="truncate text-[14px] font-medium leading-5 text-ink">
+                    {payment.expand?.member?.name ?? "Member"}
+                  </span>
+                  <span class="text-[12px] leading-4 text-mute">
+                    {payment.period ? periodLabel(payment.period) : "—"}
+                    {payment.paid_at ? ` · ${shortDate(payment.paid_at)}` : ""}
+                    {payment.method ? ` · ${payment.method}` : ""}
+                  </span>
+                </div>
+                <span class="shrink-0 text-[14px] font-medium leading-5 text-ink">
+                  {money(payment.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </Card>
+  </div>
+</AppLayout>

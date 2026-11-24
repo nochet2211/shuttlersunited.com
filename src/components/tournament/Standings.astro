@@ -1,0 +1,111 @@
+---
+/**
+ * A group table derived from the group-stage matches. Qualifying places get a
+ * left rule rather than a filled row, which keeps the table quiet while still
+ * showing the cut line at a glance.
+ */
+import type { StandingRow } from "../../lib/tournament";
+
+interface Props {
+  group?: string;
+  rows: StandingRow[];
+  /** How many places advance out of the group. */
+  advancing?: number;
+}
+
+const { group, rows, advancing = 2 } = Astro.props;
+
+const diff = (row: StandingRow) => row.gamesFor - row.gamesAgainst;
+const signed = (value: number) => (value > 0 ? `+${value}` : `${value}`);
+---
+
+<div class="overflow-hidden rounded-lg border border-hairline-soft bg-elevated">
+  {
+    group && (
+      <h4 class="border-b border-hairline-soft px-4 py-3 eyebrow">
+        Group {group}
+      </h4>
+    )
+  }
+
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[420px] border-collapse text-left">
+      <thead>
+        <tr class="border-b border-hairline-soft">
+          <th
+            class="px-4 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+            >#</th
+          >
+          <th
+            class="px-2 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+          >
+            Player
+          </th>
+          {
+            ["P", "W", "L", "Games", "Diff"].map((heading) => (
+              <th class="px-3 py-2.5 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                {heading}
+              </th>
+            ))
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((row, index) => (
+            <tr
+              class:list={[
+                "border-b border-hairline-soft last:border-0",
+                index < advancing
+                  ? "border-l-[3px] border-l-link"
+                  : "border-l-[3px] border-l-transparent",
+              ]}
+            >
+              <td class="px-4 py-2.5 text-[12px] leading-4 text-faint tabular-nums">
+                {index + 1}
+              </td>
+              <td class="px-2 py-2.5">
+                {row.slug ? (
+                  <a
+                    href={`/players/${row.slug}`}
+                    class="text-[14px] font-medium leading-5 text-ink hover:underline"
+                  >
+                    {row.name}
+                  </a>
+                ) : (
+                  <span class="text-[14px] leading-5 text-body">
+                    {row.name}
+                  </span>
+                )}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] leading-5 text-mute tabular-nums">
+                {row.played}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] font-medium leading-5 text-ink tabular-nums">
+                {row.won}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] leading-5 text-mute tabular-nums">
+                {row.lost}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] leading-5 text-body tabular-nums">
+                {row.gamesFor}–{row.gamesAgainst}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] leading-5 text-body tabular-nums">
+                {signed(diff(row))}
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  {
+    advancing > 0 && rows.length > advancing && (
+      <p class="border-t border-hairline-soft px-4 py-2 text-[12px] leading-4 text-mute">
+        <span class="mr-1.5 inline-block h-2 w-[3px] translate-y-px bg-link" />
+        Top {advancing} advance to the playoffs
+      </p>
+    )
+  }
+</div>

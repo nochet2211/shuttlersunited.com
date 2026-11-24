@@ -1,0 +1,150 @@
+---
+/**
+ * Who we entered, per event. Seed and qualification route are the two columns a
+ * draw sheet leads with, so they come before the result rather than after it.
+ */
+import Avatar from "../ui/Avatar.astro";
+import Badge from "../ui/Badge.astro";
+import { memberAvatar } from "../../lib/files";
+import { EVENT_NAMES, bySeedThenName } from "../../lib/tournament";
+import type {
+  MatchEvent,
+  TournamentEntry,
+  TournamentResult,
+} from "../../lib/types";
+
+interface Props {
+  event: MatchEvent;
+  entries: TournamentEntry[];
+  /** Results are noise before a tournament has been played. */
+  showResult?: boolean;
+}
+
+const { event, entries, showResult = true } = Astro.props;
+
+const RESULT_LABELS: Record<TournamentResult, string> = {
+  winner: "Winner",
+  "runner-up": "Runner-up",
+  "semi-final": "Semi-finalist",
+  "quarter-final": "Quarter-finalist",
+  "round-of-16": "Round of 16",
+  "group-stage": "Group stage",
+  participated: "Participated",
+};
+
+const resultTone = (result: TournamentResult) =>
+  result === "winner" ? "ink" : result === "runner-up" ? "accent" : "neutral";
+
+const sorted = entries.slice().sort(bySeedThenName);
+const isDoubles = event !== "MS" && event !== "WS";
+---
+
+<div class="overflow-hidden rounded-lg border border-hairline-soft bg-elevated">
+  <div
+    class="flex items-center justify-between gap-3 border-b border-hairline-soft px-4 py-3"
+  >
+    <h3 class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+      {EVENT_NAMES[event]}
+    </h3>
+    <span class="text-[12px] leading-4 text-faint">
+      {sorted.length}
+      {sorted.length === 1 ? "entry" : "entries"}
+    </span>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[520px] border-collapse text-left">
+      <thead>
+        <tr class="border-b border-hairline-soft">
+          <th
+            class="w-12 px-4 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+          >
+            Seed
+          </th>
+          <th
+            class="px-2 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+          >
+            Player
+          </th>
+          {
+            isDoubles && (
+              <th class="px-3 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                Partner
+              </th>
+            )
+          }
+          <th
+            class="px-3 py-2.5 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+          >
+            Qualified via
+          </th>
+          {
+            showResult && (
+              <th class="px-4 py-2.5 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                Result
+              </th>
+            )
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          sorted.map((entry) => {
+            const player = entry.expand?.member;
+            const partner = entry.expand?.partner?.name ?? entry.partner_name;
+            return (
+              <tr class="border-b border-hairline-soft last:border-0">
+                <td class="px-4 py-2.5 text-[12px] leading-4 text-faint tabular-nums">
+                  {entry.seed ?? "—"}
+                </td>
+                <td class="px-2 py-2.5">
+                  <div class="flex items-center gap-2.5">
+                    {player && (
+                      <Avatar
+                        name={player.name}
+                        src={memberAvatar(player, "100x100")}
+                        size="sm"
+                      />
+                    )}
+                    {player?.is_public ? (
+                      <a
+                        href={`/players/${player.slug}`}
+                        class="truncate text-[14px] font-medium leading-5 text-ink hover:underline"
+                      >
+                        {player.name}
+                      </a>
+                    ) : (
+                      <span class="truncate text-[14px] font-medium leading-5 text-ink">
+                        {player?.name ?? "Member"}
+                      </span>
+                    )}
+                    {entry.group_name && (
+                      <span class="shrink-0 text-[12px] leading-4 text-faint">
+                        Grp {entry.group_name}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                {isDoubles && (
+                  <td class="px-3 py-2.5 text-[14px] leading-5 text-body">
+                    {partner || "—"}
+                  </td>
+                )}
+                <td class="px-3 py-2.5 text-[14px] leading-5 text-mute">
+                  {entry.qualification || "—"}
+                </td>
+                {showResult && (
+                  <td class="px-4 py-2.5 text-right">
+                    <Badge tone={resultTone(entry.result)}>
+                      {RESULT_LABELS[entry.result]}
+                    </Badge>
+                  </td>
+                )}
+              </tr>
+            );
+          })
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

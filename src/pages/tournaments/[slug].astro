@@ -1,0 +1,443 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Button from "../../components/ui/Button.astro";
+import Card from "../../components/ui/Card.astro";
+import InfoBox from "../../components/tournament/InfoBox.astro";
+import PrizePool from "../../components/tournament/PrizePool.astro";
+import Participants from "../../components/tournament/Participants.astro";
+import Standings from "../../components/tournament/Standings.astro";
+import Bracket from "../../components/tournament/Bracket.astro";
+import SectionNav from "../../components/tournament/SectionNav.astro";
+import {
+  getTournamentBySlug,
+  listEntriesForTournament,
+  listMatchesForTournament,
+} from "../../lib/queries";
+import { shortDate } from "../../lib/format";
+import {
+  EVENT_NAMES,
+  EVENT_ORDER,
+  buildBracket,
+  groupsFor,
+  standingsFor,
+  winnerOf,
+} from "../../lib/tournament";
+import type { PrizeSlot } from "../../lib/types";
+
+const { slug } = Astro.params;
+const tournament = slug ? await getTournamentBySlug(slug) : null;
+
+if (!tournament) {
+  return new Response(null, { status: 404, statusText: "Not found" });
+}
+
+const [entries, matches] = await Promise.all([
+  listEntriesForTournament(tournament.id),
+  listMatchesForTournament(tournament.id),
+]);
+
+const isPast = tournament.status === "completed";
+const registrationOpen =
+  tournament.status === "upcoming" &&
+  (!tournament.registration_deadline ||
+    new Date(tournament.registration_deadline) > new Date());
+
+// --- format ------------------------------------------------------------------
+// Stored one stage per line; blank lines are ignored so admins can space it out.
+const formatStages = (tournament.format ?? "")
+  .split("\n")
+  .map((line) => line.trim())
+  .filter(Boolean);
+
+// --- prize pool --------------------------------------------------------------
+const prizeSlots: PrizeSlot[] = Array.isArray(tournament.prize_distribution)
+  ? tournament.prize_distribution.filter(
+      (slot): slot is PrizeSlot =>
+        Boolean(slot) &&
+        typeof slot.place === "string" &&
+        typeof slot.amount === "number",
+    )
+  : [];
+
+// --- results -----------------------------------------------------------------
+// Every event that has either an entry or a match, in draw-sheet order.
+const resultEvents = EVENT_ORDER.filter(
+  (event) =>
+    entries.some((entry) => entry.event === event) ||
+    matches.some((match) => match.event === event),
+);
+
+const eventBlocks = resultEvents.map((event) => {
+  const groups = groupsFor(matches, event);
+  return {
+    event,
+    entries: entries.filter((entry) => entry.event === event),
+    bracket: buildBracket(matches, event),
+    // An event may have a single ungrouped round robin, in which case there is
+    // one table with no group letter.
+    standings: groups.length
+      ? groups.map((group) => ({
+          group,
+          rows: standingsFor(matches, event, group),
+        }))
+      : matches.some(
+            (match) => match.event === event && match.stage === "group",
+          )
+        ? [
+            {
+              group: undefined as string | undefined,
+              rows: standingsFor(matches, event),
+            },
+          ]
+        : [],
+  };
+});
+
+const hasResults = eventBlocks.some(
+  (block) => block.bracket.length > 0 || block.standings.length > 0,
+);
+
+// --- statistics --------------------------------------------------------------
+// Only our own matches count here — the page is a club record, not a neutral
+// tournament archive, so"we" is the unit that matters.
+const ourMatches = matches.filter(
+  (match) => match.side_a_member || match.side_b_member,
+);
+const ourWins = ourMatches.filter((match) => {
+  const winner = winnerOf(match);
+  if (!winner) return false;
+  return winner === "a"
+    ? Boolean(match.side_a_member)
+    : Boolean(match.side_b_member);
+}).length;
+
+const titles = entries.filter((entry) => entry.result === "winner").length;
+const finals = entries.filter(
+  (entry) => entry.result === "winner" || entry.result === "runner-up",
+).length;
+
+const stats = [
+  { label: "Entries", value: `${entries.length}` },
+  { label: "Events contested", value: `${resultEvents.length}` },
+  ourMatches.length
+    ? { label: "Matches played", value: `${ourMatches.length}` }
+    : null,
+  ourMatches.length
+    ? {
+        label: "Match record",
+        value: `${ourWins}–${ourMatches.length - ourWins}`,
+      }
+    : null,
+  { label: "Finals reached", value: `${finals}` },
+  { label: "Titles", value: `${titles}` },
+].filter(Boolean) as { label: string; value: string }[];
+
+// --- page nav ----------------------------------------------------------------
+// Results lead when there are any — the draw sheet is what people open the
+// page for, so it gets the first tab and the first screen.
+const sections = [
+  hasResults ? { id: "results", label: "Results" } : null,
+  { id: "overview", label: "Overview" },
+  formatStages.length ? { id: "format", label: "Format" } : null,
+  prizeSlots.length ? { id: "prize-pool", label: "Prize pool" } : null,
+  entries.length ? { id: "participants", label: "Participants" } : null,
+  entries.length ? { id: "statistics", label: "Statistics" } : null,
+].filter(Boolean) as { id: string; label: string }[];
+
+const resultBlocks = eventBlocks.filter(
+  (block) => block.bracket.length > 0 || block.standings.length > 0,
+);
+
+const dateRange =
+  tournament.end_date &&
+  tournament.end_date.slice(0, 10) !== tournament.start_date.slice(0, 10)
+    ? `${shortDate(tournament.start_date)} – ${shortDate(tournament.end_date)}`
+    : shortDate(tournament.start_date);
+
+const subtitle = [dateRange, tournament.venue, tournament.city]
+  .filter(Boolean)
+  .join(" · ");
+---
+
+<Layout title={tournament.name} description={tournament.description}>
+  <div class="shell">
+    <a
+      href="/tournaments"
+      class="text-[14px] leading-5 text-mute transition-colors hover:text-ink"
+    >
+      ← All tournaments
+    </a>
+
+    {
+      /* --------------------------------------------------------------- header */
+    }
+    <header
+      class:list={[
+        "flex flex-col",
+        // A tall masthead would push the draw below the fold, so it tightens
+        // once there is a draw to show.
+        hasResults ? "mt-5 gap-2 pb-6" : "mt-6 gap-4 pb-8",
+      ]}
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <Badge tone={tournament.level === "national" ? "ink" : "neutral"}
+          >{tournament.level}</Badge
+        >
+        {
+          tournament.status === "ongoing" && (
+            <Badge tone="success">Live now</Badge>
+          )
+        }
+        {
+          tournament.status === "cancelled" && (
+            <Badge tone="error">Cancelled</Badge>
+          )
+        }
+        {isPast && <Badge tone="neutral">Completed</Badge>}
+      </div>
+
+      <h1
+        class:list={[
+          "max-w-3xl text-ink",
+          hasResults ? "heading-lg" : "display-lg",
+        ]}
+      >
+        {tournament.name}
+      </h1>
+
+      <p class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+        {subtitle}
+      </p>
+
+      {
+        (registrationOpen || tournament.external_url) && (
+          <div class="flex flex-wrap gap-3 pt-2">
+            {registrationOpen && (
+              <Button href="/dashboard" variant="primary">
+                Register your interest
+              </Button>
+            )}
+            {tournament.external_url && (
+              <Button
+                href={tournament.external_url}
+                variant="secondary"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Official page ↗
+              </Button>
+            )}
+          </div>
+        )
+      }
+    </header>
+
+    <SectionNav sections={sections} />
+
+    {
+      /* -------------------------------------------------------------- results */
+    }
+    {
+      /* Full bleed and ahead of the grid: the draw needs the whole column width,
+ and a bracket that has to be scrolled to isn't doing its job. */
+    }
+    {
+      hasResults && (
+        <section id="results" class="mb-12 scroll-mt-20">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 class="heading-md">Results</h2>
+
+            {/* One tab per event — five stacked draw sheets is more page than
+ anyone reads, and the event is how people look results up. */}
+            {resultBlocks.length > 1 && (
+              <div
+                class="flex flex-wrap gap-1"
+                role="tablist"
+                aria-label="Event"
+              >
+                {resultBlocks.map((block, index) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    data-event-tab={block.event}
+                    aria-selected={index === 0 ? "true" : "false"}
+                    class:list={[
+                      "event-tab rounded-full px-3 py-1.5 text-[14px] pointer-coarse:py-2.5 leading-5 transition-colors",
+                      index === 0
+                        ? "bg-lift font-medium text-ink"
+                        : "text-mute hover:bg-soft hover:text-ink",
+                    ]}
+                  >
+                    {EVENT_NAMES[block.event]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {resultBlocks.map((block, index) => (
+            <div
+              data-event-panel={block.event}
+              role="tabpanel"
+              hidden={resultBlocks.length > 1 && index !== 0}
+              class="flex flex-col gap-8"
+            >
+              {block.bracket.length > 0 && (
+                <div>
+                  <h3 class="mb-3 eyebrow">Playoffs</h3>
+                  <Bracket columns={block.bracket} />
+                </div>
+              )}
+
+              {block.standings.length > 0 && (
+                <div>
+                  <h3 class="mb-3 eyebrow">Group stage</h3>
+                  <div class="grid gap-4 md:grid-cols-2">
+                    {block.standings.map((table) => (
+                      <Standings group={table.group} rows={table.rows} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )
+    }
+
+    <div class="grid gap-10 pb-16 lg:grid-cols-[1fr_320px] lg:items-start">
+      <div class="flex min-w-0 flex-col gap-12">
+        {/* ------------------------------------------------------- overview */}
+        <section id="overview" class="scroll-mt-20">
+          <h2 class="heading-md mb-4">Overview</h2>
+          {
+            tournament.description ? (
+              <p class="max-w-2xl text-[16px] leading-6 text-body">
+                {tournament.description}
+              </p>
+            ) : (
+              <p class="text-[14px] leading-5 text-mute">
+                No description recorded for this event.
+              </p>
+            )
+          }
+        </section>
+
+        {/* --------------------------------------------------------- format */}
+        {
+          formatStages.length > 0 && (
+            <section id="format" class="scroll-mt-20">
+              <h2 class="heading-md mb-4">Format</h2>
+              <ol class="divide-y divide-hairline-soft overflow-hidden rounded-lg border border-hairline-soft bg-elevated">
+                {formatStages.map((stage, index) => (
+                  <li class="flex items-start gap-3 px-4 py-3">
+                    <span class="mt-0.5 w-5 shrink-0 text-[12px] leading-5 text-faint tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span class="text-[14px] leading-5 text-body">{stage}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )
+        }
+
+        {/* ----------------------------------------------------- prize pool */}
+        {
+          prizeSlots.length > 0 && (
+            <section id="prize-pool" class="scroll-mt-20">
+              <h2 class="heading-md mb-4">Prize pool</h2>
+              <PrizePool slots={prizeSlots} total={tournament.prize_pool} />
+            </section>
+          )
+        }
+
+        {/* --------------------------------------------------- participants */}
+        {
+          entries.length > 0 && (
+            <section id="participants" class="scroll-mt-20">
+              <div class="mb-4 flex items-baseline justify-between gap-4">
+                <h2 class="heading-md">Participants</h2>
+                <span class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+                  {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                </span>
+              </div>
+              <div class="flex flex-col gap-5">
+                {eventBlocks
+                  .filter((block) => block.entries.length > 0)
+                  .map((block) => (
+                    <Participants
+                      event={block.event}
+                      entries={block.entries}
+                      showResult={isPast}
+                    />
+                  ))}
+              </div>
+            </section>
+          )
+        }
+
+        {/* ----------------------------------------------------- statistics */}
+        {
+          entries.length > 0 && (
+            <section id="statistics" class="scroll-mt-20">
+              <h2 class="heading-md mb-4">Statistics</h2>
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {stats.map((stat) => (
+                  <Card padding="md">
+                    <p class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
+                      {stat.label}
+                    </p>
+                    <p class="mt-1 heading-md text-ink tabular-nums">
+                      {stat.value}
+                    </p>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )
+        }
+
+        {
+          entries.length === 0 && !hasResults && (
+            <Card padding="lg">
+              <p class="text-[14px] leading-5 text-mute">
+                No entries or results recorded yet. Club admins add them as the
+                draw is confirmed.
+              </p>
+            </Card>
+          )
+        }
+      </div>
+
+      <InfoBox
+        tournament={tournament}
+        entryCount={entries.length}
+        matchCount={matches.length}
+      />
+    </div>
+  </div>
+</Layout>
+
+<script>
+  const tabs = document.querySelectorAll<HTMLButtonElement>(".event-tab");
+  const panels = document.querySelectorAll<HTMLElement>("[data-event-panel]");
+  // Selected = surface lift, per {components.pricing-tab-selected}.
+  const ACTIVE = ["bg-lift", "font-medium", "text-ink"];
+  const IDLE = ["text-mute", "hover:bg-soft", "hover:text-ink"];
+
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => {
+      for (const other of tabs) {
+        const isTarget = other === tab;
+        other.setAttribute("aria-selected", String(isTarget));
+        other.classList.remove(...ACTIVE, ...IDLE);
+        other.classList.add(...(isTarget ? ACTIVE : IDLE));
+      }
+      for (const panel of panels) {
+        panel.hidden = panel.dataset.eventPanel !== tab.dataset.eventTab;
+      }
+    });
+  }
+</script>

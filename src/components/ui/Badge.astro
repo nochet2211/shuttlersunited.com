@@ -1,0 +1,50 @@
+---
+/**
+ * {components.status-badge}: a 12px caption on a {rounded.pill} chip at 2px 8px.
+ * The pill radius survives here — DESIGN.md keeps it for status pills, tab
+ * toggles and avatars, and nowhere else.
+ *
+ * `neutral` is the default: surface-2 fill, muted label. The saturated tones
+ * are product-state colour (Deviation 3) and belong in dashboards and tables,
+ * never on a marketing page.
+ *
+ * `bare` emits the chip geometry and no colour at all, so a caller can supply
+ * its own fill — the editorial category tints (Deviation 6) come in this way.
+ * It exists because a tone class and a caller class are the same specificity,
+ * and which one wins would otherwise depend on stylesheet order.
+ */
+interface Props {
+  tone?:
+    | "neutral"
+    | "bare"
+    | "ink"
+    | "success"
+    | "warning"
+    | "attention"
+    | "error"
+    | "accent";
+  class?: string;
+}
+const { tone = "neutral", class: className } = Astro.props;
+
+const tones = {
+  neutral: "bg-soft text-body border-hairline-soft",
+  // No fill, no label colour, no border colour — the caller owns all three.
+  bare: "",
+  ink: "bg-ink text-on-ink border-ink",
+  success: "bg-success text-on-fill border-success",
+  warning: "bg-warning text-on-fill border-warning",
+  attention: "bg-attention text-on-fill border-attention",
+  error: "bg-error text-on-error-fill border-error",
+  // Lavender as a tint, not a fill — the accent stays scarce.
+  accent: "bg-primary-soft text-link border-primary-soft",
+};
+---
+
+<span
+  class:list={[
+    "inline-flex items-center gap-1.5 rounded-full border px-2 py-[2px] text-[12px] font-medium leading-4",
+    tones[tone],
+    className,
+  ]}><slot /></span
+>

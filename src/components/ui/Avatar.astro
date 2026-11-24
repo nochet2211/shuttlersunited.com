@@ -1,0 +1,52 @@
+---
+/**
+ * Profile picture with an initials fallback — the placeholder every member
+ * starts with before they upload anything.
+ */
+import { initials } from "../../lib/format";
+
+interface Props {
+  name: string;
+  src?: string | null;
+  size?: "sm" | "md" | "lg" | "xl";
+  class?: string;
+}
+
+const { name, src, size = "md", class: className } = Astro.props;
+
+const sizes = {
+  sm: "size-7 text-[12px]",
+  md: "size-10 text-[13px]",
+  lg: "size-16 text-[20px]",
+  xl: "size-24 text-[28px]",
+};
+---
+
+<div
+  class:list={[
+    "relative shrink-0 overflow-hidden rounded-full border border-hairline-soft bg-soft",
+    sizes[size],
+    className,
+  ]}
+>
+  {
+    src ? (
+      <img
+        src={src}
+        alt=""
+        width="256"
+        height="256"
+        loading="lazy"
+        decoding="async"
+        class="size-full object-cover"
+      />
+    ) : (
+      <span
+        class="flex size-full items-center justify-center font-medium text-mute"
+        aria-hidden="true"
+      >
+        {initials(name)}
+      </span>
+    )
+  }
+</div>

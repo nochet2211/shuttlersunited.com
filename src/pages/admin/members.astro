@@ -1,0 +1,149 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Card from "../../components/ui/Card.astro";
+import Badge from "../../components/ui/Badge.astro";
+import Alert from "../../components/ui/Alert.astro";
+import Avatar from "../../components/ui/Avatar.astro";
+import { actions } from "astro:actions";
+import { getAdminClient } from "../../lib/pocketbase";
+import { memberAvatar } from "../../lib/files";
+import { shortDate } from "../../lib/format";
+import type { Member } from "../../lib/types";
+
+const statusResult = Astro.getActionResult(actions.admin.setMemberStatus);
+const roleResult = Astro.getActionResult(actions.admin.setMemberRole);
+const error = statusResult?.error ?? roleResult?.error;
+
+const pb = await getAdminClient();
+const members = await pb
+  .collection("members")
+  .getFullList<Member>({ sort: "name" });
+
+const selectClass =
+  "h-9 rounded-md border border-hairline bg-elevated px-2 text-[14px] text-ink focus:border-2 focus:border-focus focus:outline-none";
+---
+
+<AppLayout
+  section="admin"
+  title="Members"
+  eyebrow="Club administration"
+  heading="Members"
+  description={`${members.length} on the books. Change a status or grant admin access.`}
+>
+  <div class="flex flex-col gap-5">
+    {error && <Alert>{error.message}</Alert>}
+
+    <Card padding="none">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[720px] border-collapse text-left">
+          <thead>
+            <tr class="border-b border-hairline-soft">
+              {
+                ["Member", "Phone", "Joined", "Status", "Role"].map(
+                  (heading) => (
+                    <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                      {heading}
+                    </th>
+                  ),
+                )
+              }
+            </tr>
+          </thead>
+          <tbody>
+            {
+              members.map((member) => (
+                <tr class="border-b border-hairline-soft last:border-0">
+                  <td class="px-4 py-3">
+                    <div class="flex min-w-0 items-center gap-3">
+                      <Avatar
+                        name={member.name}
+                        src={memberAvatar(member, "100x100")}
+                        size="sm"
+                      />
+                      <div class="flex min-w-0 flex-col">
+                        <a
+                          href={`/players/${member.slug}`}
+                          class="truncate text-[14px] font-medium leading-5 text-ink hover:underline"
+                        >
+                          {member.name}
+                        </a>
+                        {!member.is_public && (
+                          <span class="text-[12px] leading-4 text-faint">
+                            Private profile
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+
+                  <td class="px-4 py-3 text-[12px] leading-4 text-body">
+                    {member.phone}
+                  </td>
+
+                  <td class="px-4 py-3 text-[12px] leading-4 text-mute">
+                    {member.joined_on ? shortDate(member.joined_on) : "—"}
+                  </td>
+
+                  <td class="px-4 py-3">
+                    <form
+                      method="POST"
+                      action={actions.admin.setMemberStatus}
+                      class="flex items-center gap-2"
+                    >
+                      <input type="hidden" name="id" value={member.id} />
+                      <select
+                        name="status"
+                        class={selectClass}
+                        onchange="this.form.requestSubmit()"
+                      >
+                        {["active", "pending", "inactive"].map((value) => (
+                          <option
+                            value={value}
+                            selected={member.status === value}
+                          >
+                            {value[0].toUpperCase() + value.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      <noscript>
+                        <button type="submit" class="text-[12px] text-link">
+                          Save
+                        </button>
+                      </noscript>
+                    </form>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    {member.role === "admin" && (
+                      <Badge tone="ink" class="mr-2">
+                        Admin
+                      </Badge>
+                    )}
+                    <form
+                      method="POST"
+                      action={actions.admin.setMemberRole}
+                      class="inline-flex"
+                    >
+                      <input type="hidden" name="id" value={member.id} />
+                      <input
+                        type="hidden"
+                        name="role"
+                        value={member.role === "admin" ? "member" : "admin"}
+                      />
+                      <button
+                        type="submit"
+                        class="rounded-md border border-hairline px-2.5 py-1 text-[12px] leading-4 text-body transition-colors hover:text-ink"
+                      >
+                        {member.role === "admin" ? "Revoke" : "Make admin"}
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  </div>
+</AppLayout>

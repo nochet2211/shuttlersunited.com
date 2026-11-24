@@ -1,0 +1,617 @@
+/* Scope class detection to src/ — the repo root also holds a Tailwind docs
+   snapshot under .claude/, and scanning it inflates the bundle ~10x. */
+@import "tailwindcss" source("../");
+
+/* ============================================================================
+   Shuttlers United — design tokens
+   Derived from DESIGN.md (Stripe design analysis): a rich, premium system
+   built on electric indigo, deep navy ink, and warm cream canvases. Hierarchy
+   comes from surface lifts, soft shadows, and accent gradients — a vibrant,
+   polished feel that reads as confident and modern.
+
+   Read the "Shuttlers United — Adaptation" section of DESIGN.md before
+   changing anything here: the light theme, the shifted display ladder, the
+   product-state palette and the button radius choices are all documented
+   deviations, not drift.
+   ========================================================================== */
+
+/* Dark mode is class-driven so the toggle can override the OS preference. The
+   class lands on <html> before first paint (see Layout.astro). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ----------------------------------------------------------------------------
+   Light palette — the primary Stripe-inspired palette. Warm white and cream
+   canvases, deep navy text, electric indigo accent, with ruby/magenta as
+   secondary chromatic energy.
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  /* Surface — warm white canvas with cream and soft-blue lifts */
+  --su-canvas: #ffffff;
+  --su-elevated: #ffffff;
+  --su-soft: #f6f9fc;
+  --su-lift: #edf2f7;
+  /* Card, divider and table rules */
+  --su-hairline-soft: #e3e8ee;
+  /* Input and tab outlines */
+  --su-hairline: #c4cdd5;
+
+  /* Text — deep navy ink hierarchy */
+  --su-ink: #0a2540;
+  --su-body: #425466;
+  --su-mute: #64748d;
+  --su-faint: #6b7c93;
+  --su-disabled: #9ca3af;
+
+  /* The inverse CTA: dark navy fill, white label. */
+  --su-ink-button: #0a2540;
+  --su-on-ink: #ffffff;
+
+  /* Electric Indigo — the rich primary accent. Buttons, links, brand mark. */
+  --su-primary: #533afd;
+  --su-primary-deep: #4434d4;
+  --su-primary-soft: #ede9fe;
+  --su-on-primary: #ffffff;
+  /* Body-sized indigo needs more contrast than the button fill carries. */
+  --su-link: #4434d4;
+  --su-link-deep: #3525b3;
+  --su-focus: #665efd;
+
+  /* Product-state palette — dashboards and tables only. */
+  --su-success: #0e7c3a;
+  --su-success-deep: #0a6330;
+  --su-success-soft: #ecfdf5;
+  --su-attention: #d97706;
+  --su-warning: #b45309;
+  --su-warning-soft: #fffbeb;
+  --su-warning-deep: #92400e;
+  --su-error: #dc2626;
+  --su-error-strong: #b91c1c;
+  --su-error-deep: #991b1b;
+
+  /* Placings — the one place hue does the reading. */
+  --su-gold: #b7791f;
+  --su-gold-tint: #fefce8;
+  --su-silver: #6b7280;
+  --su-silver-tint: #f3f4f6;
+  --su-bronze: #9a5c2e;
+  --su-bronze-tint: #fef3c7;
+
+  /* Label colour on a saturated badge fill. */
+  --su-on-fill: #ffffff;
+  --su-on-error-fill: #ffffff;
+
+  /* --------------------------------------------------------------------------
+     Editorial category palette — Deviation 6. A newsroom needs its feed to read
+     as chromatic at a glance, so each post category owns a hue. This is a
+     SEPARATE ladder from the product-state palette above: state colour still
+     means "settled / overdue / error" and stays in dashboards and tables, while
+     these carry taxonomy on public pages. Each hue ships a saturated `-strong`
+     for rules and dots, a `-tint` fill, and an `-on-tint` label that clears AA
+     on that fill.
+     ------------------------------------------------------------------------ */
+  --su-cat-tournament: #533afd;
+  --su-cat-tournament-tint: #eeebff;
+  --su-cat-tournament-on-tint: #3525b3;
+
+  --su-cat-result: #0e7c3a;
+  --su-cat-result-tint: #e4f7ec;
+  --su-cat-result-on-tint: #0a5b2a;
+
+  --su-cat-governing-body: #b45309;
+  --su-cat-governing-body-tint: #fdf0dc;
+  --su-cat-governing-body-on-tint: #8a3f07;
+
+  --su-cat-club: #c2258f;
+  --su-cat-club-tint: #fdeaf6;
+  --su-cat-club-on-tint: #96176d;
+
+  --su-cat-facility: #0e7490;
+  --su-cat-facility-tint: #e0f5fa;
+  --su-cat-facility-on-tint: #0a566b;
+
+  --su-cat-notice: #c2185b;
+  --su-cat-notice-tint: #fde9f0;
+  --su-cat-notice-on-tint: #961245;
+
+  /* --------------------------------------------------------------------------
+     Gradient mesh — Deviation 7. DESIGN.md's signature move: an atmospheric
+     wash of cream, sherbet, lavender, indigo and ruby occupying the upper third
+     of a marketing page. Held as raw stops so the mesh utilities below can
+     compose them, and so dark can restate the same shape at lower luminance.
+     ------------------------------------------------------------------------ */
+  --su-mesh-1: #f5e9d4;
+  --su-mesh-2: #ffd9c0;
+  --su-mesh-3: #e6dcff;
+  --su-mesh-4: #cfd6ff;
+  --su-mesh-5: #ffd6ec;
+  --su-mesh-veil: rgba(255, 255, 255, 0.55);
+
+  /* Depth: soft shadows for cards and panels — richer than a flat ladder. */
+  --su-shadow-panel:
+    0 4px 16px -2px rgba(10, 37, 64, 0.08),
+    0 2px 4px -1px rgba(10, 37, 64, 0.04);
+}
+
+/* ----------------------------------------------------------------------------
+   Dark palette — deep navy-ink surfaces with warm grays. Rich and inviting,
+   not the flat black of the previous Linear system.
+   -------------------------------------------------------------------------- */
+.dark {
+  color-scheme: dark;
+
+  --su-canvas: #0a0e1a;
+  --su-elevated: #111827;
+  --su-soft: #1a2236;
+  --su-lift: #1e293b;
+  --su-hairline-soft: #2a3349;
+  --su-hairline: #3b4763;
+
+  --su-ink: #f1f5f9;
+  --su-body: #cbd5e1;
+  --su-mute: #94a3b8;
+  --su-faint: #7c8db5;
+  --su-disabled: #475569;
+
+  --su-ink-button: #f1f5f9;
+  --su-on-ink: #0a0e1a;
+
+  --su-primary: #665efd;
+  --su-primary-deep: #8b83ff;
+  --su-primary-soft: #1a1740;
+  --su-on-primary: #ffffff;
+  --su-link: #8b83ff;
+  --su-link-deep: #a49dff;
+  --su-focus: #665efd;
+
+  --su-success: #34d058;
+  --su-success-deep: #56e777;
+  --su-success-soft: #0e2214;
+  --su-attention: #f59e0b;
+  --su-warning: #fbbf24;
+  --su-warning-soft: #2a1f0c;
+  --su-warning-deep: #fbbf24;
+  --su-error: #f87171;
+  --su-error-strong: #ef5f63;
+  --su-error-deep: #fca5a5;
+
+  --su-gold: #f59e0b;
+  --su-gold-tint: #1c1508;
+  --su-silver: #94a3b8;
+  --su-silver-tint: #151b2b;
+  --su-bronze: #d97706;
+  --su-bronze-tint: #1c1408;
+
+  --su-on-fill: #0a0e1a;
+  --su-on-error-fill: #0a0e1a;
+
+  /* Editorial category palette — Deviation 6, restated for the dark canvas.
+     Hues lift toward their brighter end so they read on navy; tints become
+     deep washes and the label rides light on top. */
+  --su-cat-tournament: #8b83ff;
+  --su-cat-tournament-tint: #1d1a45;
+  --su-cat-tournament-on-tint: #b9b3ff;
+
+  --su-cat-result: #34d058;
+  --su-cat-result-tint: #0d2418;
+  --su-cat-result-on-tint: #6ee89a;
+
+  --su-cat-governing-body: #fbbf24;
+  --su-cat-governing-body-tint: #2a1f0c;
+  --su-cat-governing-body-on-tint: #fcd34d;
+
+  --su-cat-club: #f96bee;
+  --su-cat-club-tint: #2e1030;
+  --su-cat-club-on-tint: #fba3f3;
+
+  --su-cat-facility: #38bdf8;
+  --su-cat-facility-tint: #0a2430;
+  --su-cat-facility-on-tint: #7dd3fc;
+
+  --su-cat-notice: #fb7185;
+  --su-cat-notice-tint: #2c1119;
+  --su-cat-notice-on-tint: #fda4af;
+
+  /* Gradient mesh — Deviation 7, dark restatement. Same five-stop shape, pulled
+     down to navy-adjacent luminance so the hero glows rather than glares. */
+  --su-mesh-1: #2a2340;
+  --su-mesh-2: #37243a;
+  --su-mesh-3: #241f4d;
+  --su-mesh-4: #1b2450;
+  --su-mesh-5: #331f3d;
+  --su-mesh-veil: rgba(10, 14, 26, 0.55);
+
+  --su-shadow-panel:
+    0 4px 16px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
+   Theme — `inline` so utilities emit var(--su-*) and re-resolve per theme
+   rather than baking in the light value.
+   ========================================================================== */
+
+@theme inline {
+  /* --- Surface ladder ----------------------------------------------------- */
+  --color-canvas: var(--su-canvas);
+  --color-elevated: var(--su-elevated);
+  --color-soft: var(--su-soft);
+  --color-lift: var(--su-lift);
+  --color-hairline: var(--su-hairline);
+  --color-hairline-soft: var(--su-hairline-soft);
+
+  /* --- Text --------------------------------------------------------------- */
+  --color-ink: var(--su-ink);
+  --color-body: var(--su-body);
+  --color-mute: var(--su-mute);
+  --color-faint: var(--su-faint);
+  --color-disabled: var(--su-disabled);
+  --color-on-ink: var(--su-on-ink);
+
+  /* --- Indigo / links ----------------------------------------------------- */
+  --color-primary: var(--su-primary);
+  --color-primary-deep: var(--su-primary-deep);
+  --color-primary-soft: var(--su-primary-soft);
+  --color-on-primary: var(--su-on-primary);
+  --color-link: var(--su-link);
+  --color-link-deep: var(--su-link-deep);
+  --color-link-soft: var(--su-primary-soft);
+  --color-focus: var(--su-focus);
+
+  /* --- Product state ------------------------------------------------------ */
+  --color-success: var(--su-success);
+  --color-success-deep: var(--su-success-deep);
+  --color-success-soft: var(--su-success-soft);
+  --color-attention: var(--su-attention);
+  --color-warning: var(--su-warning);
+  --color-warning-soft: var(--su-warning-soft);
+  --color-warning-deep: var(--su-warning-deep);
+  --color-error: var(--su-error);
+  --color-error-strong: var(--su-error-strong);
+  --color-error-deep: var(--su-error-deep);
+  --color-on-fill: var(--su-on-fill);
+  --color-on-error-fill: var(--su-on-error-fill);
+
+  /* --- Editorial category palette (Deviation 6) --------------------------- */
+  --color-cat-tournament: var(--su-cat-tournament);
+  --color-cat-tournament-tint: var(--su-cat-tournament-tint);
+  --color-cat-tournament-on-tint: var(--su-cat-tournament-on-tint);
+  --color-cat-result: var(--su-cat-result);
+  --color-cat-result-tint: var(--su-cat-result-tint);
+  --color-cat-result-on-tint: var(--su-cat-result-on-tint);
+  --color-cat-governing-body: var(--su-cat-governing-body);
+  --color-cat-governing-body-tint: var(--su-cat-governing-body-tint);
+  --color-cat-governing-body-on-tint: var(--su-cat-governing-body-on-tint);
+  --color-cat-club: var(--su-cat-club);
+  --color-cat-club-tint: var(--su-cat-club-tint);
+  --color-cat-club-on-tint: var(--su-cat-club-on-tint);
+  --color-cat-facility: var(--su-cat-facility);
+  --color-cat-facility-tint: var(--su-cat-facility-tint);
+  --color-cat-facility-on-tint: var(--su-cat-facility-on-tint);
+  --color-cat-notice: var(--su-cat-notice);
+  --color-cat-notice-tint: var(--su-cat-notice-tint);
+  --color-cat-notice-on-tint: var(--su-cat-notice-on-tint);
+
+  /* --- Placings ----------------------------------------------------------- */
+  --color-gold: var(--su-gold);
+  --color-gold-tint: var(--su-gold-tint);
+  --color-silver: var(--su-silver);
+  --color-silver-tint: var(--su-silver-tint);
+  --color-bronze: var(--su-bronze);
+  --color-bronze-tint: var(--su-bronze-tint);
+
+  /* --- Type ---------------------------------------------------------------
+     Stripe uses Sohne (proprietary). Inter at weight 300-500 is the closest
+     free substitute. JetBrains Mono for the mono role. */
+  --font-sans:
+    Inter, "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* --- Radius — pills on primary CTAs; md on secondary -------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-xxl: 24px;
+  --radius-full: 9999px;
+
+  /* --- Spacing ------------------------------------------------------------ */
+  --spacing-section: 80px;
+
+  /* --- Elevation ---------------------------------------------------------- */
+  --shadow-panel: var(--su-shadow-panel);
+}
+
+/* ============================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  /* Tailwind v4 defaults border-color to currentColor; the system's default
+     border is the card hairline. */
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-hairline-soft);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    background-color: var(--color-canvas);
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Stripe pairs display weight 300 with body weight 300-400. Headings use
+     weight 600 for sufficient contrast at smaller sizes. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-ink);
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  /* Focus ring: 2px electric indigo outline */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ============================================================================
+   Typography — Stripe-inspired hierarchy as named utilities, with the display
+   ladder pulled up a step (Deviation 2, revised).
+
+   Stripe runs display at weight 300, which reads as premium at its 56px hero
+   size and as anaemic everywhere else. This system's display roles are mostly
+   consumed at 22-32px — card titles, rail headings, stat values — where 300 is
+   simply thin, and thin is the look this project is explicitly trying to leave
+   behind. Display now sits at 500-600, tracking unchanged. Body stays 400.
+   ========================================================================== */
+
+/* Display hero — 56/300/-1.4 — largest type in the system. */
+@utility hero-display {
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.8px;
+  @media (min-width: 480px) {
+    font-size: 40px;
+    letter-spacing: -1px;
+  }
+  @media (min-width: 768px) {
+    font-size: 56px;
+    letter-spacing: -1.4px;
+  }
+}
+
+/* Display large — 48/300/-0.96 */
+@utility display-lg {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.56px;
+  @media (min-width: 768px) {
+    font-size: 48px;
+    letter-spacing: -0.96px;
+  }
+}
+
+/* Heading large — 32/300/-0.64 */
+@utility heading-lg {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.48px;
+  @media (min-width: 768px) {
+    font-size: 32px;
+    letter-spacing: -0.64px;
+  }
+}
+
+/* Heading medium — 26/300/-0.26 */
+@utility heading-md {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.22px;
+  @media (min-width: 768px) {
+    font-size: 26px;
+    letter-spacing: -0.26px;
+  }
+}
+
+/* Subtitle large — 22/300/-0.22 — lead body and intro paragraphs. */
+@utility subtitle-lg {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: -0.2px;
+}
+
+/* Subtitle medium — 18/300 — hero subhead. */
+@utility subtitle-md {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+/* Button/label text — 14/400 — button labels and field labels. */
+@utility label-sm {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+/* Eyebrow — 10/400/+0.1 uppercase tracking. Stripe uses micro-cap with
+   slight positive tracking to mark taxonomy. */
+@utility eyebrow {
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.1px;
+  text-transform: uppercase;
+  color: var(--color-mute);
+}
+
+/* Mono — 13/400 — identifiers, amounts, booking codes. */
+@utility mono-token {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Component primitives
+   ========================================================================== */
+
+/* Card — surface lift with hairline border AND a subtle shadow for depth. */
+@utility card {
+  background-color: var(--color-elevated);
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* Panel — the full-width content panel. Wider radius, subtle shadow. */
+@utility panel {
+  background-color: var(--color-elevated);
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* CTA banner — soft surface with hairline, slight visual lift. */
+@utility cta-banner {
+  background-color: var(--color-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================================
+   Gradient mesh — Deviation 7. DESIGN.md calls for an atmospheric mesh across
+   the upper third of a marketing page; this is that, as a composable surface.
+
+   Built from five radial stops rather than a linear ramp, so the colour pools
+   in soft lobes instead of banding. The veil layer sits on top at low alpha to
+   pull the whole thing back toward the canvas — without it the stops fight the
+   type for attention. `isolate` so the pseudo-element cannot escape a rounded
+   parent.
+   ========================================================================== */
+
+@utility mesh {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(at 12% 8%, var(--su-mesh-1) 0px, transparent 55%),
+    radial-gradient(at 78% 4%, var(--su-mesh-2) 0px, transparent 50%),
+    radial-gradient(at 96% 42%, var(--su-mesh-3) 0px, transparent 55%),
+    radial-gradient(at 42% 0%, var(--su-mesh-4) 0px, transparent 48%),
+    radial-gradient(at 68% 66%, var(--su-mesh-5) 0px, transparent 52%);
+}
+
+/* The mesh, faded to nothing at the bottom edge so a hero can hand off to the
+   canvas without a seam. */
+@utility mesh-fade {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(at 12% 8%, var(--su-mesh-1) 0px, transparent 55%),
+    radial-gradient(at 78% 4%, var(--su-mesh-2) 0px, transparent 50%),
+    radial-gradient(at 96% 42%, var(--su-mesh-3) 0px, transparent 55%),
+    radial-gradient(at 42% 0%, var(--su-mesh-4) 0px, transparent 48%),
+    radial-gradient(at 68% 66%, var(--su-mesh-5) 0px, transparent 52%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 82%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
+}
+
+/* ============================================================================
+   Chromatic surfaces — the pieces that make a feed read as a newsroom rather
+   than a list of identical boxes.
+   ========================================================================== */
+
+/* Feature card — the pinned lead story. Same geometry as `card`, but the fill
+   is a category tint and the left edge carries a 3px rule in the full-strength
+   hue. Consumers set --cat and --cat-tint. */
+@utility card-feature {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--cat-tint, var(--color-soft));
+  border: 1px solid var(--color-hairline-soft);
+  border-left: 3px solid var(--cat, var(--color-primary));
+  border-radius: var(--radius-xl);
+  box-shadow: var(--su-shadow-panel);
+}
+
+/* A category-tinted rule under a rail or section header. Reads as a spine the
+   eye can follow down the page. */
+@utility accent-rule {
+  border-bottom: 2px solid var(--cat, var(--color-primary));
+}
+
+/* Stat tile — numbers on a lozenge instead of bare text. These sit on top of
+   the hero mesh, so the fill is `elevated` rather than `soft`: a near-canvas
+   tone vanishes against the wash. The shadow and stronger hairline are what
+   let them read as objects on the gradient rather than holes in it. */
+@utility stat-tile {
+  background-color: var(--color-elevated);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgba(10, 37, 64, 0.06);
+}
+
+/* The centered container. Max content width ~1280px. */
+@utility shell {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 24px;
+  @media (min-width: 768px) {
+    padding-inline: 32px;
+  }
+}
