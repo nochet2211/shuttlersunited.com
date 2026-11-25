@@ -8,15 +8,15 @@
  * part on the live home page already loaded behind them, and the browser then
  * moves to the home page for real.
  *
- *   /launch                 3-second countdown
- *   /launch?countdown=10    a longer one for the crowd; 0 skips it
+ *   /launch                 10-second countdown for the hall to call out
+ *   /launch?countdown=3     a shorter one (0 to 10); 0 skips it
  */
 import "../styles/global.css";
 
-const requested = Number(Astro.url.searchParams.get("countdown") ?? 3);
+const requested = Number(Astro.url.searchParams.get("countdown") ?? 10);
 const countdown = Number.isFinite(requested)
   ? Math.min(Math.max(Math.round(requested), 0), 10)
-  : 3;
+  : 10;
 ---
 
 <!doctype html>
@@ -278,7 +278,7 @@ const countdown = Number.isFinite(requested)
   const canvas = document.querySelector<HTMLCanvasElement>(".confetti")!;
   const fullscreen = document.querySelector<HTMLButtonElement>(".fullscreen")!;
 
-  const countdown = Number(body.dataset.countdown ?? 3);
+  const countdown = Number(body.dataset.countdown ?? 10);
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
