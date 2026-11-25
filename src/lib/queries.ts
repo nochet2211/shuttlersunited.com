@@ -222,23 +222,6 @@ export async function listPlans(): Promise<MembershipPlan[]> {
   );
 }
 
-export async function listPaymentsFor(memberId: string): Promise<Payment[]> {
-  return safely(
-    async () =>
-      expand(
-        await all<Payment>(
-          'payments',
-          'SELECT * FROM payments WHERE member = ? ORDER BY created DESC',
-          memberId,
-        ),
-        'plan',
-        'membership_plans',
-      ),
-    [],
-    'listPaymentsFor',
-  );
-}
-
 /** The paid membership row for a member and month, if there is one. */
 export const findDuesPayment = (memberId: string, period: string) =>
   first<Payment>(

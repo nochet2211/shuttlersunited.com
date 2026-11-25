@@ -3,44 +3,18 @@ import AppLayout from "../../layouts/AppLayout.astro";
 import Card from "../../components/ui/Card.astro";
 import Badge from "../../components/ui/Badge.astro";
 import Alert from "../../components/ui/Alert.astro";
-import Empty from "../../components/ui/Empty.astro";
-import { duesStatusFor, listPaymentsFor, listPlans } from "../../lib/queries";
+import { duesStatusFor, listPlans } from "../../lib/queries";
 import { isRazorpayConfigured } from "../../lib/razorpay";
 import { money, periodLabel, shortDate } from "../../lib/format";
-import type { PaymentStatus } from "../../lib/types";
 
 const member = Astro.locals.member!;
 
-const [dues, history, plans] = await Promise.all([
+const [dues, plans] = await Promise.all([
   duesStatusFor(member.id),
-  listPaymentsFor(member.id),
   listPlans(),
 ]);
 
 const paymentsEnabled = isRazorpayConfigured();
-
-// Only rows that represent a real attempt belong in a history table; a bare
-// "created" row is an abandoned checkout, not a transaction.
-const ledger = history.filter((row) => row.status !== "created");
-
-const statusTone: Record<
-  PaymentStatus,
-  "success" | "warning" | "error" | "neutral"
-> = {
-  paid: "success",
-  attempted: "warning",
-  created: "neutral",
-  failed: "error",
-  refunded: "neutral",
-};
-
-const statusLabel: Record<PaymentStatus, string> = {
-  paid: "Paid",
-  attempted: "Incomplete",
-  created: "Started",
-  failed: "Failed",
-  refunded: "Refunded",
-};
 ---
 
 <AppLayout
@@ -48,7 +22,7 @@ const statusLabel: Record<PaymentStatus, string> = {
   title="Dues & payments"
   eyebrow="Membership"
   heading="Dues & payments"
-  description="Settle your monthly dues and keep every receipt in one place."
+  description="Settle your monthly dues."
 >
   <div class="flex flex-col gap-6">
     <div id="pay-alert" hidden>
@@ -130,66 +104,6 @@ const statusLabel: Record<PaymentStatus, string> = {
         }
       </div>
     </Card>
-
-    {/* ------------------------------------------------------------ history */}
-    <section>
-      <h2 class="heading-md mb-4">Payment history</h2>
-
-      {
-        ledger.length === 0 ? (
-          <Empty title="No payments yet">
-            Once you settle your first month, every receipt appears here.
-          </Empty>
-        ) : (
-          <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
-            <table class="w-full min-w-[620px] border-collapse text-left">
-              <thead>
-                <tr class="border-b border-hairline-soft">
-                  {[
-                    "Period",
-                    "Amount",
-                    "Method",
-                    "Date",
-                    "Reference",
-                    "Status",
-                  ].map((heading) => (
-                    <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ledger.map((row) => (
-                  <tr class="border-b border-hairline-soft last:border-0">
-                    <td class="px-4 py-3 text-[14px] leading-5 text-ink">
-                      {row.period ? periodLabel(row.period) : "—"}
-                    </td>
-                    <td class="px-4 py-3 text-[14px] font-medium leading-5 text-ink">
-                      {money(row.amount)}
-                    </td>
-                    <td class="px-4 py-3 text-[14px] leading-5 text-body">
-                      {row.method || "—"}
-                    </td>
-                    <td class="px-4 py-3 text-[12px] leading-4 text-mute">
-                      {row.paid_at ? shortDate(row.paid_at) : "—"}
-                    </td>
-                    <td class="px-4 py-3 text-[12px] leading-4 text-faint">
-                      {row.razorpay_payment_id || "—"}
-                    </td>
-                    <td class="px-4 py-3">
-                      <Badge tone={statusTone[row.status]}>
-                        {statusLabel[row.status]}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      }
-    </section>
   </div>
 </AppLayout>
 

@@ -111,7 +111,7 @@ Amounts are **always in paise**. Rupees exist only for display.
 
 ## Before going live
 
-- [ ] **Legal pages.** `/terms`, `/privacy`, `/refunds` and `/contact` name
+- [ ] **Legal pages.** `/terms`, `/privacy` and `/contact` name
       the club, Dimapur and admin@shuttlersunited.com. Razorpay checks these
       during merchant onboarding and may ask for the registered entity name,
       a postal address and a phone number, which they do not yet carry.
