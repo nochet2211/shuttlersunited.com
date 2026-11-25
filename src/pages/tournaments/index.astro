@@ -99,95 +99,163 @@ const panels = [
                 : "Completed tournaments and their results will appear here."}
             </Empty>
           ) : (
-            <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
-              <table class="w-full min-w-[760px] border-collapse text-left">
-                <thead>
-                  <tr class="border-b border-hairline-soft">
-                    <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      Tier
-                    </th>
-                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      Tournament
-                    </th>
-                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      Dates
-                    </th>
-                    <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      Location
-                    </th>
-                    <th class="px-3 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      Prize pool
-                    </th>
-                    <th class="px-4 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                      {panel.id === "past" ? "Best finish" : "Entries"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {panel.events.map((event) => {
-                    const summary = summaries.get(event.id);
-                    return (
-                      <tr class="border-b border-hairline-soft last:border-0 hover:bg-soft/50">
-                        <td class="px-4 py-3">
+            <>
+              {/* Phones: one stacked entry per event. Six columns cannot fit, and
+                a table that scrolls sideways hides the name it leads with. */}
+              <ul class="card flex flex-col divide-y divide-hairline-soft md:hidden">
+                {panel.events.map((event) => {
+                  const summary = summaries.get(event.id);
+                  return (
+                    <li>
+                      <a
+                        href={`/tournaments/${event.slug}`}
+                        class="flex flex-col gap-2 p-4 transition-colors hover:bg-soft/50"
+                      >
+                        <div class="flex items-center justify-between gap-3">
                           <Badge tone={levelTone(event.level)}>
                             {capitalize(event.level)}
                           </Badge>
-                        </td>
-                        <td class="px-3 py-3">
-                          <a
-                            href={`/tournaments/${event.slug}`}
-                            class="text-[14px] font-medium leading-5 text-ink hover:underline"
-                          >
-                            {event.name}
-                          </a>
-                          <div class="flex items-center gap-2">
-                            {event.status === "ongoing" && (
-                              <span class="text-[12px] uppercase leading-4 text-error tracking-[0.06em]">
-                                Live now
+                          <span class="tracking-[0.06em] text-[12px] uppercase leading-4 text-body">
+                            {dateRange(event)}
+                          </span>
+                        </div>
+                        <span class="text-[16px] font-medium leading-[1.4] text-ink">
+                          {event.name}
+                        </span>
+                        {event.status === "ongoing" && (
+                          <span class="text-[12px] uppercase leading-4 text-error tracking-[0.06em]">
+                            Live now
+                          </span>
+                        )}
+                        {(event.venue || event.city) && (
+                          <span class="text-[14px] leading-5 text-body">
+                            {[event.venue, event.city]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </span>
+                        )}
+                        {(event.prize_pool ||
+                          summary?.entries ||
+                          (panel.id === "past" && summary?.best)) && (
+                          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-[12px] leading-4 text-mute">
+                            {event.prize_pool ? (
+                              <span>
+                                Prize pool{" "}
+                                <span class="text-ink tabular-nums">
+                                  {money(event.prize_pool)}
+                                </span>
                               </span>
-                            )}
-                            {event.organizer && (
-                              <span class="truncate text-[12px] leading-4 text-mute">
-                                {event.organizer}
+                            ) : null}
+                            {panel.id === "past" ? (
+                              summary?.best && (
+                                <ResultBadge result={summary.best} />
+                              )
+                            ) : summary?.entries ? (
+                              <span>
+                                Entries{" "}
+                                <span class="text-ink tabular-nums">
+                                  {summary.entries}
+                                </span>
                               </span>
-                            )}
+                            ) : null}
                           </div>
-                        </td>
-                        <td class="whitespace-nowrap px-3 py-3 tracking-[0.06em] text-[12px] uppercase leading-4 text-body">
-                          {dateRange(event)}
-                        </td>
-                        <td class="px-3 py-3 text-[14px] leading-5 text-body">
-                          {event.venue ?? "—"}
-                          {event.city && (
-                            <span class="block text-[12px] leading-4 text-faint">
-                              {event.city}
-                            </span>
-                          )}
-                        </td>
-                        <td class="whitespace-nowrap px-3 py-3 text-right text-[14px] leading-5 text-ink tabular-nums">
-                          {event.prize_pool ? money(event.prize_pool) : "—"}
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                          {panel.id === "past" ? (
-                            summary?.best ? (
-                              <ResultBadge result={summary.best} />
-                            ) : (
-                              <span class="text-[14px] leading-5 text-faint">
-                                —
+                        )}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div class="hidden overflow-x-auto rounded-lg border border-hairline-soft bg-elevated md:block">
+                <table class="w-full min-w-[760px] border-collapse text-left">
+                  <thead>
+                    <tr class="border-b border-hairline-soft">
+                      <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        Tier
+                      </th>
+                      <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        Tournament
+                      </th>
+                      <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        Dates
+                      </th>
+                      <th class="px-3 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        Location
+                      </th>
+                      <th class="px-3 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        Prize pool
+                      </th>
+                      <th class="px-4 py-3 text-right tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                        {panel.id === "past" ? "Best finish" : "Entries"}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {panel.events.map((event) => {
+                      const summary = summaries.get(event.id);
+                      return (
+                        <tr class="border-b border-hairline-soft last:border-0 hover:bg-soft/50">
+                          <td class="px-4 py-3">
+                            <Badge tone={levelTone(event.level)}>
+                              {capitalize(event.level)}
+                            </Badge>
+                          </td>
+                          <td class="px-3 py-3">
+                            <a
+                              href={`/tournaments/${event.slug}`}
+                              class="text-[14px] font-medium leading-5 text-ink hover:underline"
+                            >
+                              {event.name}
+                            </a>
+                            <div class="flex items-center gap-2">
+                              {event.status === "ongoing" && (
+                                <span class="text-[12px] uppercase leading-4 text-error tracking-[0.06em]">
+                                  Live now
+                                </span>
+                              )}
+                              {event.organizer && (
+                                <span class="truncate text-[12px] leading-4 text-mute">
+                                  {event.organizer}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td class="whitespace-nowrap px-3 py-3 tracking-[0.06em] text-[12px] uppercase leading-4 text-body">
+                            {dateRange(event)}
+                          </td>
+                          <td class="px-3 py-3 text-[14px] leading-5 text-body">
+                            {event.venue ?? "—"}
+                            {event.city && (
+                              <span class="block text-[12px] leading-4 text-faint">
+                                {event.city}
                               </span>
-                            )
-                          ) : (
-                            <span class="text-[14px] leading-5 text-body tabular-nums">
-                              {summary?.entries ?? 0}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            )}
+                          </td>
+                          <td class="whitespace-nowrap px-3 py-3 text-right text-[14px] leading-5 text-ink tabular-nums">
+                            {event.prize_pool ? money(event.prize_pool) : "—"}
+                          </td>
+                          <td class="px-4 py-3 text-right">
+                            {panel.id === "past" ? (
+                              summary?.best ? (
+                                <ResultBadge result={summary.best} />
+                              ) : (
+                                <span class="text-[14px] leading-5 text-faint">
+                                  —
+                                </span>
+                              )
+                            ) : (
+                              <span class="text-[14px] leading-5 text-body tabular-nums">
+                                {summary?.entries ?? 0}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ))
