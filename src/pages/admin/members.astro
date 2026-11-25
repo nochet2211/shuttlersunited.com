@@ -5,7 +5,7 @@ import Badge from "../../components/ui/Badge.astro";
 import Alert from "../../components/ui/Alert.astro";
 import Avatar from "../../components/ui/Avatar.astro";
 import { actions } from "astro:actions";
-import { getAdminClient } from "../../lib/pocketbase";
+import { all } from "../../lib/db";
 import { memberAvatar } from "../../lib/files";
 import { shortDate } from "../../lib/format";
 import type { Member } from "../../lib/types";
@@ -14,10 +14,10 @@ const statusResult = Astro.getActionResult(actions.admin.setMemberStatus);
 const roleResult = Astro.getActionResult(actions.admin.setMemberRole);
 const error = statusResult?.error ?? roleResult?.error;
 
-const pb = await getAdminClient();
-const members = await pb
-  .collection("members")
-  .getFullList<Member>({ sort: "name" });
+const members = await all<Member>(
+  "members",
+  "SELECT * FROM members ORDER BY name",
+);
 
 const selectClass =
   "h-9 rounded-md border border-hairline bg-elevated px-2 text-[14px] text-ink focus:border-2 focus:border-focus focus:outline-none";

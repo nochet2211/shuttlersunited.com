@@ -1,6 +1,7 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
-import { getAdminClient } from '../lib/pocketbase';
+import { insert, timestamp, update } from '../lib/db';
+import { findDuesPayment } from '../lib/queries';
 import { toPaise } from '../lib/razorpay';
 import { periodKey } from '../lib/format';
 
@@ -20,8 +21,7 @@ export const admin = {
     }),
     handler: async ({ id, status }, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
-      await pb.collection('members').update(id, { status });
+      await update('members', id, { status });
       return { ok: true };
     },
   }),
@@ -40,8 +40,7 @@ export const admin = {
         });
       }
 
-      const pb = await getAdminClient();
-      await pb.collection('members').update(id, { role });
+      await update('members', id, { role });
       return { ok: true };
     },
   }),
@@ -62,23 +61,16 @@ export const admin = {
     }),
     handler: async (input, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
       const period = input.period ?? periodKey();
 
-      const existing = await pb.collection('payments').getList(1, 1, {
-        filter: pb.filter(
-          'member = {:member} && type = "membership" && period = {:period} && status = "paid"',
-          { member: input.member, period },
-        ),
-      });
-      if (existing.totalItems > 0) {
+      if (await findDuesPayment(input.member, period)) {
         throw new ActionError({
           code: 'CONFLICT',
           message: 'That member has already settled this month.',
         });
       }
 
-      await pb.collection('payments').create({
+      await insert('payments', {
         member: input.member,
         type: 'membership',
         status: 'paid',
@@ -86,7 +78,7 @@ export const admin = {
         currency: 'INR',
         period,
         method: input.method,
-        paid_at: new Date().toISOString().replace('T', ' '),
+        paid_at: timestamp(),
         notes: input.notes ?? `Recorded offline by ${context.locals.member?.name ?? 'an admin'}`,
       });
 

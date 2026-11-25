@@ -1,16 +1,15 @@
 import type { AstroCookies } from 'astro';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { AUTH_COOKIE_SECRET, MEMBER_PASSWORD_SECRET } from 'astro:env/server';
-import { createClient } from './pocketbase';
-import { derivePassword } from './member-password';
+import { AUTH_COOKIE_SECRET } from 'astro:env/server';
+import { getById } from './db';
 import type { Member } from './types';
 
 const COOKIE_NAME = 'su_session';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 /**
- * The cookie holds the PocketBase auth token, HMAC-signed so a tampered or
- * forged cookie is rejected before it ever reaches PocketBase.
+ * The cookie holds "<member id>:<expiry ms>", HMAC-signed so a tampered or
+ * forged cookie is rejected before it reaches the database.
  */
 function sign(value: string): string {
   return createHmac('sha256', AUTH_COOKIE_SECRET).update(value).digest('base64url');
@@ -23,8 +22,9 @@ function verifySignature(value: string, signature: string): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export function setSessionCookie(cookies: AstroCookies, token: string): void {
-  cookies.set(COOKIE_NAME, `${token}.${sign(token)}`, {
+function setSessionCookie(cookies: AstroCookies, memberId: string): void {
+  const payload = `${memberId}:${Date.now() + MAX_AGE_SECONDS * 1000}`;
+  cookies.set(COOKIE_NAME, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     secure: import.meta.env.PROD,
     sameSite: 'lax',
@@ -37,49 +37,41 @@ export function clearSessionCookie(cookies: AstroCookies): void {
   cookies.delete(COOKIE_NAME, { path: '/' });
 }
 
-function readToken(cookies: AstroCookies): string | null {
+function readMemberId(cookies: AstroCookies): string | null {
   const raw = cookies.get(COOKIE_NAME)?.value;
   if (!raw) return null;
 
-  // The token is a JWT and contains dots, so split from the right.
   const separator = raw.lastIndexOf('.');
   if (separator === -1) return null;
 
-  const token = raw.slice(0, separator);
-  const signature = raw.slice(separator + 1);
+  const payload = raw.slice(0, separator);
+  if (!verifySignature(payload, raw.slice(separator + 1))) return null;
 
-  return verifySignature(token, signature) ? token : null;
+  const [memberId, expiresAt] = payload.split(':');
+  if (!memberId || !(Number(expiresAt) > Date.now())) return null;
+
+  return memberId;
 }
 
 /**
- * Resolves the signed-in member, or null. Refreshing against PocketBase on each
- * request costs one round trip but means a deactivated member loses access
- * immediately rather than when their token happens to expire.
+ * Resolves the signed-in member, or null. Loading the row on each request costs
+ * one query but means a deactivated member loses access immediately rather
+ * than when their cookie happens to expire.
  */
 export async function resolveMember(cookies: AstroCookies): Promise<Member | null> {
-  const token = readToken(cookies);
-  if (!token) return null;
-
-  const pb = createClient();
-  pb.authStore.save(token, null);
+  const memberId = readMemberId(cookies);
+  if (!memberId) return null;
 
   try {
-    const { record } = await pb.collection('members').authRefresh();
-    const member = record as unknown as Member;
-
-    if (member.status !== 'active') {
+    const member = await getById<Member>('members', memberId);
+    if (member?.status !== 'active') {
       clearSessionCookie(cookies);
       return null;
     }
-
-    // The refresh hands back a rotated token; keep the cookie current.
-    if (pb.authStore.token && pb.authStore.token !== token) {
-      setSessionCookie(cookies, pb.authStore.token);
-    }
-
     return member;
-  } catch {
-    clearSessionCookie(cookies);
+  } catch (error) {
+    // A database fault is not a reason to sign everyone out.
+    console.error('[auth] could not load the session member', error);
     return null;
   }
 }
@@ -130,16 +122,7 @@ export function clearVerifiedPhone(cookies: AstroCookies): void {
   cookies.delete(PENDING_COOKIE, { path: '/' });
 }
 
-/** Signs a member in by minting a real PocketBase auth token for them. */
-export async function startSession(
-  cookies: AstroCookies,
-  memberId: string,
-  phone: string,
-): Promise<void> {
-  const pb = createClient();
-  await pb
-    .collection('members')
-    .authWithPassword(phone, derivePassword(memberId, MEMBER_PASSWORD_SECRET));
-
-  setSessionCookie(cookies, pb.authStore.token);
+/** Signs a member in. The OTP check has already proved they own the phone. */
+export function startSession(cookies: AstroCookies, memberId: string): void {
+  setSessionCookie(cookies, memberId);
 }

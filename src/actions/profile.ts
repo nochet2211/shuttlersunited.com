@@ -1,7 +1,8 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
-import { getAdminClient } from '../lib/pocketbase';
-import type { Member } from '../lib/types';
+import { getById, insert, remove, update } from '../lib/db';
+import { deleteFile, storeFile } from '../lib/files';
+import type { Gear, Member } from '../lib/types';
 
 function requireMember(locals: App.Locals): Member {
   if (!locals.member) {
@@ -35,14 +36,13 @@ export const profile = {
     }),
     handler: async (input, context) => {
       const member = requireMember(context.locals);
-      const pb = await getAdminClient();
 
-      await pb.collection('members').update(member.id, {
+      await update('members', member.id, {
         ...input,
         bio: input.bio ?? '',
         city: input.city ?? '',
         emergency_contact: input.emergency_contact ?? '',
-        date_of_birth: input.date_of_birth || null,
+        date_of_birth: input.date_of_birth || '',
         preferred_events: input.preferred_events ?? [],
         is_public: input.is_public ?? false,
       });
@@ -65,11 +65,10 @@ export const profile = {
     }),
     handler: async ({ avatar }, context) => {
       const member = requireMember(context.locals);
-      const pb = await getAdminClient();
 
-      const form = new FormData();
-      form.append('avatar', avatar);
-      await pb.collection('members').update(member.id, form);
+      const filename = await storeFile('members', member.id, avatar);
+      await update('members', member.id, { avatar: filename });
+      await deleteFile('members', member.id, member.avatar);
 
       return { ok: true };
     },
@@ -87,9 +86,8 @@ export const profile = {
     }),
     handler: async (input, context) => {
       const member = requireMember(context.locals);
-      const pb = await getAdminClient();
 
-      const gear = await pb.collection('gear').create({
+      const gear = await insert<Gear>('gear', {
         ...input,
         member: member.id,
         spec: input.spec ?? '',
@@ -106,15 +104,17 @@ export const profile = {
     input: z.object({ id: z.string().min(1) }),
     handler: async ({ id }, context) => {
       const member = requireMember(context.locals);
-      const pb = await getAdminClient();
 
-      // The admin client bypasses API rules, so ownership must be checked here.
-      const gear = await pb.collection('gear').getOne(id);
+      // The database has no row rules, so ownership must be checked here.
+      const gear = await getById<Gear>('gear', id);
+      if (!gear) {
+        throw new ActionError({ code: 'NOT_FOUND', message: 'That gear no longer exists.' });
+      }
       if (gear.member !== member.id && context.locals.isAdmin !== true) {
         throw new ActionError({ code: 'FORBIDDEN', message: 'That is not your gear.' });
       }
 
-      await pb.collection('gear').delete(id);
+      await remove('gear', id);
       return { ok: true };
     },
   }),

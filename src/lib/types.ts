@@ -1,4 +1,4 @@
-/** Shapes of the PocketBase collections. Kept in sync with scripts/setup-pocketbase.mjs. */
+/** Shapes of the database rows. Kept in sync with migrations/. */
 
 export type Role = 'member' | 'admin';
 export type MemberStatus = 'active' | 'inactive' | 'pending';

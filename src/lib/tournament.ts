@@ -77,7 +77,7 @@ const roundIndex = (round: MatchRound) => ROUND_ORDER.indexOf(round);
 
 // --- scores ------------------------------------------------------------------
 
-/** Normalises the stored JSON, which may arrive as [] or null from PocketBase. */
+/** Normalises the stored JSON, which may arrive as [] or null. */
 export function games(match: Match): GameScore[] {
   return Array.isArray(match.scores)
     ? match.scores.filter(

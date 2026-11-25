@@ -1,6 +1,6 @@
 // @ts-check
 import { defineConfig, envField } from 'astro/config';
-import node from '@astrojs/node';
+import cloudflare from '@astrojs/cloudflare';
 import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
@@ -16,7 +16,10 @@ export default defineConfig({
     '/players': '/members',
     '/players/[slug]': '/members/[slug]',
   },
-  adapter: node({ mode: 'standalone' }),
+  // Deployed as a Cloudflare Worker with static assets (see wrangler.jsonc).
+  // Images are transformed by the Cloudflare Images binding at runtime, since
+  // the homepage renders on demand and sharp cannot run in workerd.
+  adapter: cloudflare({ imageService: 'cloudflare-binding' }),
 
   vite: {
     plugins: [tailwindcss()],
@@ -28,20 +31,8 @@ export default defineConfig({
 
   env: {
     schema: {
-      // --- PocketBase ---
-      POCKETBASE_URL: envField.string({
-        context: 'server',
-        access: 'public',
-        default: 'http://127.0.0.1:8090',
-      }),
-      POCKETBASE_ADMIN_EMAIL: envField.string({ context: 'server', access: 'secret' }),
-      POCKETBASE_ADMIN_PASSWORD: envField.string({ context: 'server', access: 'secret' }),
-
       // --- Session signing ---
       AUTH_COOKIE_SECRET: envField.string({ context: 'server', access: 'secret' }),
-      // Derives each member's PocketBase password. Long-lived: rotating it
-      // locks every member out until passwords are re-derived.
-      MEMBER_PASSWORD_SECRET: envField.string({ context: 'server', access: 'secret' }),
 
       // --- WhatsApp OTP (Gupshup) ---
       GUPSHUP_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),

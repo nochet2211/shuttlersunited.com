@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shuttlersunited",
+  // The adapter fills in `main` and the ASSETS / IMAGES bindings at build time.
+  "compatibility_date": "2026-11-20",
+  // node:crypto (cookie signing, OTP hashing, Razorpay signatures) and Buffer.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Served on workers.dev until the shuttlersunited.com zone is added to this
+  // account; then restore the custom domains:
+  //   "routes": [
+  //     { "pattern": "shuttlersunited.com", "custom_domain": true },
+  //     { "pattern": "www.shuttlersunited.com", "custom_domain": true }
+  //   ],
+  "workers_dev": true,
+  // The club's data. Schema in migrations/; apply with `npm run db:migrate`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shuttlersunited",
+      "database_id": "608800f2-82ba-4221-99fd-078d814453cd",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Uploads (avatars, post covers and attachments), served by /files/[...path].
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "shuttlersunited-files" }]
+}

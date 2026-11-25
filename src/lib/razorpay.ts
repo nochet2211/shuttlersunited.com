@@ -1,4 +1,3 @@
-import Razorpay from 'razorpay';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   RAZORPAY_KEY_ID,
@@ -17,16 +16,6 @@ export function isRazorpayConfigured(): boolean {
   return Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
 }
 
-let client: Razorpay | null = null;
-
-function getClient(): Razorpay {
-  if (!isRazorpayConfigured()) {
-    throw new Error('Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.');
-  }
-  client ??= new Razorpay({ key_id: RAZORPAY_KEY_ID!, key_secret: RAZORPAY_KEY_SECRET! });
-  return client;
-}
-
 export interface CreateOrderInput {
   amountPaise: number;
   /** Our own payment row id — this is what makes the dashboard reconcilable. */
@@ -34,15 +23,41 @@ export interface CreateOrderInput {
   notes: Record<string, string>;
 }
 
+export interface RazorpayOrder {
+  id: string;
+  amount: number;
+  currency: string;
+  receipt: string;
+  status: string;
+}
+
+/**
+ * Calls the Orders API with fetch rather than the `razorpay` SDK: the SDK is
+ * built on axios, whose Node http adapter is not reliable on Cloudflare Workers.
+ */
 export async function createOrder({ amountPaise, receipt, notes }: CreateOrderInput) {
-  return getClient().orders.create({
-    amount: amountPaise,
-    currency: 'INR',
-    receipt,
-    // Notes surface as columns in the Razorpay dashboard export, which is what
-    // makes a settlement reconcilable against our own ledger without guesswork.
-    notes,
+  if (!isRazorpayConfigured()) {
+    throw new Error('Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.');
+  }
+  const response = await fetch('https://api.razorpay.com/v1/orders', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      amount: amountPaise,
+      currency: 'INR',
+      receipt,
+      // Notes surface as columns in the Razorpay dashboard export, which is what
+      // makes a settlement reconcilable against our own ledger without guesswork.
+      notes,
+    }),
   });
+  if (!response.ok) {
+    throw new Error(`Razorpay order creation failed (${response.status}): ${await response.text()}`);
+  }
+  return (await response.json()) as RazorpayOrder;
 }
 
 function safeEqualHex(a: string, b: string): boolean {

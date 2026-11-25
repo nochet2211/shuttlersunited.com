@@ -6,7 +6,7 @@ import Badge from "../../../components/ui/Badge.astro";
 import Button from "../../../components/ui/Button.astro";
 import StoryForm from "../../../components/news/StoryForm.astro";
 import { actions } from "astro:actions";
-import { getAdminClient, isNotFound } from "../../../lib/pocketbase";
+import { getById } from "../../../lib/db";
 import { listTournaments } from "../../../lib/queries";
 import { actionMessage } from "../../../lib/action-error";
 import { postCover } from "../../../lib/news";
@@ -20,13 +20,7 @@ if (result && !result.error) {
 
 const { id } = Astro.params;
 
-let post: Post | null = null;
-try {
-  const pb = await getAdminClient();
-  post = await pb.collection("posts").getOne<Post>(id!);
-} catch (error) {
-  if (!isNotFound(error)) throw error;
-}
+const post = await getById<Post>("posts", id!);
 
 if (!post) {
   return new Response("Not found", { status: 404 });

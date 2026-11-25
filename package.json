@@ -8,33 +8,31 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview",
-    "start": "node ./dist/server/entry.mjs",
+    "preview": "astro build && wrangler dev",
     "check": "astro check",
+    "db:migrate": "wrangler d1 migrations apply shuttlersunited --local",
+    "db:migrate:remote": "wrangler d1 migrations apply shuttlersunited --remote",
+    "db:import": "node scripts/import-pocketbase.mjs --local",
+    "db:import:remote": "node scripts/import-pocketbase.mjs --remote",
     "astro": "astro",
-    "pb": "./pocketbase serve --http=127.0.0.1:8090",
-    "pb:setup": "node scripts/setup-pocketbase.mjs",
-    "pb:seed": "node scripts/setup-pocketbase.mjs --seed",
-    "pb:seed:pilot": "node scripts/seed-pilot-member.mjs",
-    "pb:seed:draw": "node scripts/seed-draw-demo.mjs",
-    "pb:seed:roster": "node scripts/seed-roster.mjs",
-    "pb:seed:results": "node scripts/seed-results.mjs"
+    "deploy": "astro build && wrangler deploy",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@astrojs/node": "^11.1.4",
+    "@astrojs/cloudflare": "^14.4.9",
     "@tailwindcss/vite": "^4.3.3",
-    "astro": "^7.2.9",
-    "pocketbase": "^0.28.0",
-    "razorpay": "^2.9.8",
+    "astro": "^7.4.13",
     "tailwindcss": "^4.3.3"
   },
   "allowScripts": {
-    "esbuild": true
+    "esbuild": true,
+    "workerd": true
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@types/node": "^26.4.0",
     "prettier-plugin-astro": "^0.14.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.168.0"
   }
 }

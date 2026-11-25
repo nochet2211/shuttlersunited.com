@@ -5,7 +5,7 @@ import {
   GUPSHUP_APP_NAME,
   GUPSHUP_OTP_TEMPLATE_ID,
 } from 'astro:env/server';
-import { getAdminClient } from './pocketbase';
+import { all, first, insert, timestamp, update } from './db';
 import type { OtpCode } from './types';
 
 const CODE_LENGTH = 6;
@@ -64,37 +64,35 @@ function hashCode(phone: string, code: string): string {
 }
 
 /**
- * Issues a code and delivers it over WhatsApp. Returns the code only when no
- * provider is configured, so local development works without a Meta account.
+ * Issues a code and delivers it over WhatsApp. Returns the code only in local
+ * dev with no provider configured, so the flow works without a Meta account.
  */
 export async function issueOtp(rawPhone: string): Promise<{ phone: string; devCode?: string }> {
   const phone = normalisePhone(rawPhone);
-  const pb = await getAdminClient();
   const now = Date.now();
 
-  const recent = await pb.collection('otp_codes').getList<OtpCode>(1, 10, {
-    filter: pb.filter('phone = {:phone} && created > {:since}', {
-      phone,
-      since: new Date(now - 60 * 60 * 1000).toISOString().replace('T', ' '),
-    }),
-    sort: '-created',
-  });
+  const recent = await all<OtpCode & { created: string }>(
+    'otp_codes',
+    'SELECT * FROM otp_codes WHERE phone = ? AND created > ? ORDER BY created DESC LIMIT 10',
+    phone,
+    timestamp(new Date(now - 60 * 60 * 1000)),
+  );
 
-  if (recent.items.length >= MAX_PER_HOUR) {
+  if (recent.length >= MAX_PER_HOUR) {
     throw new OtpError('Too many codes requested. Try again in an hour.', 'RATE_LIMITED');
   }
 
-  const newest = recent.items[0] as (OtpCode & { created: string }) | undefined;
+  const newest = recent[0];
   if (newest && now - new Date(newest.created).getTime() < RESEND_COOLDOWN_SECONDS * 1000) {
     throw new OtpError('Please wait a minute before requesting another code.', 'COOLDOWN');
   }
 
   const code = String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, '0');
 
-  await pb.collection('otp_codes').create({
+  await insert('otp_codes', {
     phone,
     code_hash: hashCode(phone, code),
-    expires_at: new Date(now + TTL_MINUTES * 60 * 1000).toISOString().replace('T', ' '),
+    expires_at: timestamp(new Date(now + TTL_MINUTES * 60 * 1000)),
     attempts: 0,
     consumed: false,
   });
@@ -103,10 +101,12 @@ export async function issueOtp(rawPhone: string): Promise<{ phone: string; devCo
     GUPSHUP_API_KEY && GUPSHUP_SOURCE_NUMBER && GUPSHUP_APP_NAME && GUPSHUP_OTP_TEMPLATE_ID;
 
   if (!configured) {
-    // Surfaced in the dev server log and returned to the login page so the flow
-    // is testable end-to-end before Gupshup is provisioned.
+    // Logged so the flow works before Gupshup is provisioned. Only local dev
+    // also shows it on the login page: in production that would let anyone
+    // sign in as any number, so there it is readable only by whoever can see
+    // the Worker's logs (`wrangler tail`).
     console.info(`[otp] WhatsApp not configured — code for ${phone} is ${code}`);
-    return { phone, devCode: code };
+    return import.meta.env.DEV ? { phone, devCode: code } : { phone };
   }
 
   await sendWhatsAppOtp(phone, code);
@@ -142,15 +142,12 @@ async function sendWhatsAppOtp(phone: string, code: string): Promise<void> {
 /** Verifies a code and burns it. Returns the normalised phone on success. */
 export async function verifyOtp(rawPhone: string, code: string): Promise<string> {
   const phone = normalisePhone(rawPhone);
-  const pb = await getAdminClient();
-
-  let record: OtpCode;
-  try {
-    record = await pb.collection('otp_codes').getFirstListItem<OtpCode>(
-      pb.filter('phone = {:phone} && consumed = false', { phone }),
-      { sort: '-created' },
-    );
-  } catch {
+  const record = await first<OtpCode>(
+    'otp_codes',
+    'SELECT * FROM otp_codes WHERE phone = ? AND consumed = 0 ORDER BY created DESC',
+    phone,
+  );
+  if (!record) {
     throw new OtpError('That code has expired. Request a new one.', 'EXPIRED');
   }
 
@@ -167,10 +164,10 @@ export async function verifyOtp(rawPhone: string, code: string): Promise<string>
   const matches = expected.length === actual.length && timingSafeEqual(expected, actual);
 
   if (!matches) {
-    await pb.collection('otp_codes').update(record.id, { attempts: record.attempts + 1 });
+    await update('otp_codes', record.id, { attempts: record.attempts + 1 });
     throw new OtpError('That code is incorrect.', 'INCORRECT');
   }
 
-  await pb.collection('otp_codes').update(record.id, { consumed: true });
+  await update('otp_codes', record.id, { consumed: true });
   return phone;
 }

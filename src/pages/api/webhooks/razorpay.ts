@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getAdminClient, isNotFound } from '../../../lib/pocketbase';
+import { first, getById, timestamp, update } from '../../../lib/db';
 import { verifyWebhookSignature } from '../../../lib/razorpay';
 import type { Payment } from '../../../lib/types';
 
@@ -84,37 +84,23 @@ interface RazorpayPayment {
 
 /** Finds our ledger row by order id, falling back to the id carried in notes. */
 async function findPayment(entity: RazorpayPayment): Promise<Payment | null> {
-  const pb = await getAdminClient();
-
   if (entity.order_id) {
-    try {
-      return await pb
-        .collection('payments')
-        .getFirstListItem<Payment>(
-          pb.filter('razorpay_order_id = {:order}', { order: entity.order_id }),
-        );
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
-    }
+    const byOrder = await first<Payment>(
+      'payments',
+      'SELECT * FROM payments WHERE razorpay_order_id = ?',
+      entity.order_id,
+    );
+    if (byOrder) return byOrder;
   }
 
   const fallbackId = entity.notes?.payment_id;
-  if (fallbackId) {
-    try {
-      return await pb.collection('payments').getOne<Payment>(fallbackId);
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
-    }
-  }
-
-  return null;
+  return fallbackId ? getById<Payment>('payments', fallbackId) : null;
 }
 
 async function onCaptured(event: RazorpayEvent): Promise<void> {
   const entity = event.payload.payment?.entity;
   if (!entity) return;
 
-  const pb = await getAdminClient();
   const record = await findPayment(entity);
 
   if (!record) {
@@ -134,13 +120,13 @@ async function onCaptured(event: RazorpayEvent): Promise<void> {
     );
   }
 
-  await pb.collection('payments').update(record.id, {
+  await update('payments', record.id, {
     status: 'paid',
     razorpay_payment_id: entity.id,
     razorpay_order_id: entity.order_id || record.razorpay_order_id,
     method: entity.method ?? '',
     amount: entity.amount,
-    paid_at: new Date().toISOString().replace('T', ' '),
+    paid_at: timestamp(),
     notes: amountMismatch
       ? `Amount mismatch — expected ${record.amount} paise, received ${entity.amount}. Review.`
       : record.notes || '',
@@ -151,11 +137,10 @@ async function onFailed(event: RazorpayEvent): Promise<void> {
   const entity = event.payload.payment?.entity;
   if (!entity) return;
 
-  const pb = await getAdminClient();
   const record = await findPayment(entity);
   if (!record || record.status === 'paid') return;
 
-  await pb.collection('payments').update(record.id, {
+  await update('payments', record.id, {
     status: 'failed',
     razorpay_payment_id: entity.id,
     failure_reason: entity.error_description?.slice(0, 300) ?? 'Payment failed.',
@@ -166,20 +151,18 @@ async function onRefunded(event: RazorpayEvent): Promise<void> {
   const refund = event.payload.refund?.entity;
   if (!refund) return;
 
-  const pb = await getAdminClient();
-  try {
-    const record = await pb
-      .collection('payments')
-      .getFirstListItem<Payment>(
-        pb.filter('razorpay_payment_id = {:payment}', { payment: refund.payment_id }),
-      );
-
-    await pb.collection('payments').update(record.id, {
-      status: 'refunded',
-      notes: `Refunded ${refund.amount} paise (${refund.id}).`,
-    });
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
+  const record = await first<Payment>(
+    'payments',
+    'SELECT * FROM payments WHERE razorpay_payment_id = ?',
+    refund.payment_id,
+  );
+  if (!record) {
     console.error('[razorpay] refund for an unknown payment', refund.payment_id);
+    return;
   }
+
+  await update('payments', record.id, {
+    status: 'refunded',
+    notes: `Refunded ${refund.amount} paise (${refund.id}).`,
+  });
 }

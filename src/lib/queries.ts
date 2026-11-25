@@ -1,4 +1,4 @@
-import { getAdminClient, isNotFound } from './pocketbase';
+import { all, expand, first } from './db';
 import { periodKey } from './format';
 import { medalsFrom, type MedalWin } from './members';
 import type {
@@ -15,14 +15,15 @@ import type {
 } from './types';
 
 /**
- * Read helpers shared by pages. These use the superuser client, so every one of
- * them must apply its own visibility filter — `is_public`, ownership, or admin.
+ * Read helpers shared by pages. The database has no access rules of its own, so
+ * every one of them must apply its own visibility filter — `is_public`,
+ * ownership, or admin.
  *
  * A page that renders member-scoped data is responsible for passing the right
  * member id; these functions never infer it.
  */
 
-/** Empty results rather than a 500 when PocketBase is unreachable. */
+/** Empty results rather than a 500 when the database is unreachable. */
 async function safely<T>(work: () => Promise<T>, fallback: T, label: string): Promise<T> {
   try {
     return await work();
@@ -34,40 +35,32 @@ async function safely<T>(work: () => Promise<T>, fallback: T, label: string): Pr
 
 export async function listPublicMembers(): Promise<Member[]> {
   return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('members').getFullList<Member>({
-        filter: 'is_public = true && status = "active"',
-        sort: 'name',
-      });
-    },
+    () =>
+      all<Member>(
+        'members',
+        "SELECT * FROM members WHERE is_public = 1 AND status = 'active' ORDER BY name",
+      ),
     [],
     'listPublicMembers',
   );
 }
 
 export async function getMemberBySlug(slug: string): Promise<Member | null> {
-  try {
-    const pb = await getAdminClient();
-    return await pb
-      .collection('members')
-      .getFirstListItem<Member>(pb.filter('slug = {:slug}', { slug }));
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    console.error('[query:getMemberBySlug]', error);
-    return null;
-  }
+  return safely(
+    () => first<Member>('members', 'SELECT * FROM members WHERE slug = ?', slug),
+    null,
+    'getMemberBySlug',
+  );
 }
 
 export async function listGearFor(memberId: string): Promise<Gear[]> {
   return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('gear').getFullList<Gear>({
-        filter: pb.filter('member = {:member}', { member: memberId }),
-        sort: '-is_current,category',
-      });
-    },
+    () =>
+      all<Gear>(
+        'gear',
+        'SELECT * FROM gear WHERE member = ? ORDER BY is_current DESC, category',
+        memberId,
+      ),
     [],
     'listGearFor',
   );
@@ -76,17 +69,22 @@ export async function listGearFor(memberId: string): Promise<Gear[]> {
 export async function listEntriesFor(memberId: string): Promise<TournamentEntry[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      return pb.collection('tournament_entries').getFullList<TournamentEntry>({
-        filter: pb.filter('member = {:member}', { member: memberId }),
-        expand: 'tournament,partner',
-        sort: '-tournament.start_date',
-      });
+      const entries = await all<TournamentEntry>(
+        'tournament_entries',
+        `SELECT e.* FROM tournament_entries e
+         LEFT JOIN tournaments t ON t.id = e.tournament
+         WHERE e.member = ? ORDER BY t.start_date DESC`,
+        memberId,
+      );
+      await expand(entries, 'tournament', 'tournaments');
+      return expand(entries, 'partner', 'members');
     },
     [],
     'listEntriesFor',
   );
 }
+
+const PODIUM = "result IN ('winner', 'runner-up', 'semi-final')";
 
 /**
  * Every member's medals, keyed by member id, for the roster. One read over the
@@ -95,12 +93,14 @@ export async function listEntriesFor(memberId: string): Promise<TournamentEntry[
 export async function medalsByMember(): Promise<Map<string, MedalWin[]>> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const podium = await pb.collection('tournament_entries').getFullList<TournamentEntry>({
-        filter: 'result = "winner" || result = "runner-up" || result = "semi-final"',
-        expand: 'tournament',
-        fields: 'member,result,event,expand.tournament.name',
-      });
+      const podium = await expand(
+        await all<TournamentEntry>(
+          'tournament_entries',
+          `SELECT member, result, event, tournament FROM tournament_entries WHERE ${PODIUM}`,
+        ),
+        'tournament',
+        'tournaments',
+      );
 
       const byMember = new Map<string, TournamentEntry[]>();
       for (const entry of podium) {
@@ -115,40 +115,37 @@ export async function medalsByMember(): Promise<Map<string, MedalWin[]>> {
 
 export async function listTournaments(status?: Tournament['status']): Promise<Tournament[]> {
   return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('tournaments').getFullList<Tournament>({
-        filter: status ? pb.filter('status = {:status}', { status }) : '',
-        sort: 'start_date',
-      });
-    },
+    () =>
+      status
+        ? all<Tournament>(
+            'tournaments',
+            'SELECT * FROM tournaments WHERE status = ? ORDER BY start_date',
+            status,
+          )
+        : all<Tournament>('tournaments', 'SELECT * FROM tournaments ORDER BY start_date'),
     [],
     'listTournaments',
   );
 }
 
 export async function getTournamentBySlug(slug: string): Promise<Tournament | null> {
-  try {
-    const pb = await getAdminClient();
-    return await pb
-      .collection('tournaments')
-      .getFirstListItem<Tournament>(pb.filter('slug = {:slug}', { slug }));
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    console.error('[query:getTournamentBySlug]', error);
-    return null;
-  }
+  return safely(
+    () => first<Tournament>('tournaments', 'SELECT * FROM tournaments WHERE slug = ?', slug),
+    null,
+    'getTournamentBySlug',
+  );
 }
 
 export async function listEntriesForTournament(id: string): Promise<TournamentEntry[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      return pb.collection('tournament_entries').getFullList<TournamentEntry>({
-        filter: pb.filter('tournament = {:id}', { id }),
-        expand: 'member,partner',
-        sort: 'event',
-      });
+      const entries = await all<TournamentEntry>(
+        'tournament_entries',
+        'SELECT * FROM tournament_entries WHERE tournament = ? ORDER BY event',
+        id,
+      );
+      await expand(entries, 'member', 'members');
+      return expand(entries, 'partner', 'members');
     },
     [],
     'listEntriesForTournament',
@@ -158,14 +155,15 @@ export async function listEntriesForTournament(id: string): Promise<TournamentEn
 export async function listMatchesForTournament(id: string): Promise<Match[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      return pb.collection('matches').getFullList<Match>({
-        filter: pb.filter('tournament = {:id}', { id }),
-        expand: 'side_a_member,side_b_member',
-        // Bracket columns are ordered in code — `round` is a select, so
-        // PocketBase would sort it alphabetically, not chronologically.
-        sort: 'slot',
-      });
+      // Bracket columns are ordered in code — `round` is a code like "QF", so
+      // sorting on it here would be alphabetical, not chronological.
+      const matches = await all<Match>(
+        'matches',
+        'SELECT * FROM matches WHERE tournament = ? ORDER BY slot',
+        id,
+      );
+      await expand(matches, 'side_a_member', 'members');
+      return expand(matches, 'side_b_member', 'members');
     },
     [],
     'listMatchesForTournament',
@@ -174,17 +172,17 @@ export async function listMatchesForTournament(id: string): Promise<Match[]> {
 
 /**
  * Entry counts and our best finish per tournament, for the index table. One
- * read over a small collection beats a query per row.
+ * read over a small table beats a query per row.
  */
 export async function tournamentSummaries(): Promise<
   Map<string, { entries: number; best?: TournamentResult }>
 > {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const all = await pb.collection('tournament_entries').getFullList<TournamentEntry>({
-        fields: 'tournament,result',
-      });
+      const rows = await all<TournamentEntry>(
+        'tournament_entries',
+        'SELECT tournament, result FROM tournament_entries',
+      );
 
       const rank: TournamentResult[] = [
         'winner',
@@ -197,7 +195,7 @@ export async function tournamentSummaries(): Promise<
       ];
 
       const summaries = new Map<string, { entries: number; best?: TournamentResult }>();
-      for (const entry of all) {
+      for (const entry of rows) {
         const current = summaries.get(entry.tournament) ?? { entries: 0 };
         current.entries++;
         if (!current.best || rank.indexOf(entry.result) < rank.indexOf(current.best)) {
@@ -214,12 +212,11 @@ export async function tournamentSummaries(): Promise<
 
 export async function listPlans(): Promise<MembershipPlan[]> {
   return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb
-        .collection('membership_plans')
-        .getFullList<MembershipPlan>({ filter: 'is_active = true', sort: 'amount' });
-    },
+    () =>
+      all<MembershipPlan>(
+        'membership_plans',
+        'SELECT * FROM membership_plans WHERE is_active = 1 ORDER BY amount',
+      ),
     [],
     'listPlans',
   );
@@ -227,72 +224,70 @@ export async function listPlans(): Promise<MembershipPlan[]> {
 
 export async function listPaymentsFor(memberId: string): Promise<Payment[]> {
   return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('payments').getFullList<Payment>({
-        filter: pb.filter('member = {:member}', { member: memberId }),
-        expand: 'plan',
-        sort: '-created',
-      });
-    },
+    async () =>
+      expand(
+        await all<Payment>(
+          'payments',
+          'SELECT * FROM payments WHERE member = ? ORDER BY created DESC',
+          memberId,
+        ),
+        'plan',
+        'membership_plans',
+      ),
     [],
     'listPaymentsFor',
   );
 }
+
+/** The paid membership row for a member and month, if there is one. */
+export const findDuesPayment = (memberId: string, period: string) =>
+  first<Payment>(
+    'payments',
+    `SELECT * FROM payments
+     WHERE member = ? AND type = 'membership' AND period = ? AND status = 'paid'`,
+    memberId,
+    period,
+  );
 
 /** Whether this member has settled the given month (defaults to the current one). */
 export async function duesStatusFor(
   memberId: string,
   period = periodKey(),
 ): Promise<{ period: string; paid: boolean; payment: Payment | null }> {
-  try {
-    const pb = await getAdminClient();
-    const payment = await pb
-      .collection('payments')
-      .getFirstListItem<Payment>(
-        pb.filter(
-          'member = {:member} && type = "membership" && period = {:period} && status = "paid"',
-          { member: memberId, period },
-        ),
-      );
-    return { period, paid: true, payment };
-  } catch (error) {
-    if (!isNotFound(error)) console.error('[query:duesStatusFor]', error);
-    return { period, paid: false, payment: null };
-  }
+  const payment = await safely(() => findDuesPayment(memberId, period), null, 'duesStatusFor');
+  return { period, paid: Boolean(payment), payment };
 }
+
+const expandPosts = async (posts: Post[]) => {
+  await expand(posts, 'tournament', 'tournaments');
+  return expand(posts, 'author', 'members');
+};
 
 export async function listPosts(
   options: { limit?: number; category?: PostCategory; exclude?: string } = {},
 ): Promise<Post[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-
-      const conditions = ['status = "published"'];
-      const params: Record<string, string> = {};
+      const conditions = ["status = 'published'"];
+      const params: unknown[] = [];
       if (options.category) {
-        conditions.push('category = {:category}');
-        params.category = options.category;
+        conditions.push('category = ?');
+        params.push(options.category);
       }
       if (options.exclude) {
-        conditions.push('id != {:exclude}');
-        params.exclude = options.exclude;
+        conditions.push('id != ?');
+        params.push(options.exclude);
       }
+      if (options.limit) params.push(options.limit);
 
-      const filter = pb.filter(conditions.join(' && '), params);
-      const sort = '-is_pinned,-published_at';
-
-      if (options.limit) {
-        const page = await pb
-          .collection('posts')
-          .getList<Post>(1, options.limit, { filter, sort, expand: 'tournament,author' });
-        return page.items;
-      }
-
-      return pb
-        .collection('posts')
-        .getFullList<Post>({ filter, sort, expand: 'tournament,author' });
+      return expandPosts(
+        await all<Post>(
+          'posts',
+          `SELECT * FROM posts WHERE ${conditions.join(' AND ')}
+           ORDER BY is_pinned DESC, published_at DESC${options.limit ? ' LIMIT ?' : ''}`,
+          ...params,
+        ),
+      );
     },
     [],
     'listPosts',
@@ -300,36 +295,29 @@ export async function listPosts(
 }
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
-  try {
-    const pb = await getAdminClient();
-    return await pb
-      .collection('posts')
-      .getFirstListItem<Post>(
-        pb.filter('slug = {:slug} && status = "published"', { slug }),
-        { expand: 'tournament,author' },
+  return safely(
+    async () => {
+      const post = await first<Post>(
+        'posts',
+        "SELECT * FROM posts WHERE slug = ? AND status = 'published'",
+        slug,
       );
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    console.error('[query:getPostBySlug]', error);
-    return null;
-  }
+      return post ? (await expandPosts([post]))[0] : null;
+    },
+    null,
+    'getPostBySlug',
+  );
 }
 
 /** How many published stories sit in each category, for the filter chips. */
 export async function postCounts(): Promise<Map<PostCategory, number>> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const all = await pb.collection('posts').getFullList<Post>({
-        filter: 'status = "published"',
-        fields: 'category',
-      });
-
-      const counts = new Map<PostCategory, number>();
-      for (const post of all) {
-        counts.set(post.category, (counts.get(post.category) ?? 0) + 1);
-      }
-      return counts;
+      const rows = await all<{ category: PostCategory; count: number }>(
+        'posts',
+        "SELECT category, COUNT(*) AS count FROM posts WHERE status = 'published' GROUP BY category",
+      );
+      return new Map(rows.map((row) => [row.category, row.count]));
     },
     new Map(),
     'postCounts',
@@ -350,11 +338,10 @@ export async function fixtureBoard(limit = 4): Promise<{
 }> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const rows = await pb.collection('tournaments').getFullList<Tournament>({
-        filter: 'status = "ongoing" || status = "upcoming"',
-        sort: 'start_date',
-      });
+      const rows = await all<Tournament>(
+        'tournaments',
+        "SELECT * FROM tournaments WHERE status IN ('ongoing', 'upcoming') ORDER BY start_date",
+      );
 
       return {
         ongoing: rows.filter((row) => row.status === 'ongoing'),
@@ -370,13 +357,14 @@ export async function fixtureBoard(limit = 4): Promise<{
 export async function listLiveMatches(limit = 6): Promise<Match[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const page = await pb.collection('matches').getList<Match>(1, limit, {
-        filter: 'status = "live"',
-        expand: 'tournament,side_a_member,side_b_member',
-        sort: 'scheduled_at',
-      });
-      return page.items;
+      const matches = await all<Match>(
+        'matches',
+        "SELECT * FROM matches WHERE status = 'live' ORDER BY scheduled_at LIMIT ?",
+        limit,
+      );
+      await expand(matches, 'tournament', 'tournaments');
+      await expand(matches, 'side_a_member', 'members');
+      return expand(matches, 'side_b_member', 'members');
     },
     [],
     'listLiveMatches',
@@ -391,13 +379,16 @@ export async function listLiveMatches(limit = 6): Promise<Match[]> {
 export async function recentResults(limit = 4): Promise<TournamentEntry[]> {
   return safely(
     async () => {
-      const pb = await getAdminClient();
-      const page = await pb.collection('tournament_entries').getList<TournamentEntry>(1, limit, {
-        filter: 'result = "winner" || result = "runner-up" || result = "semi-final"',
-        expand: 'tournament,member,partner',
-        sort: '-tournament.start_date',
-      });
-      return page.items;
+      const entries = await all<TournamentEntry>(
+        'tournament_entries',
+        `SELECT e.* FROM tournament_entries e
+         LEFT JOIN tournaments t ON t.id = e.tournament
+         WHERE e.${PODIUM} ORDER BY t.start_date DESC LIMIT ?`,
+        limit,
+      );
+      await expand(entries, 'tournament', 'tournaments');
+      await expand(entries, 'member', 'members');
+      return expand(entries, 'partner', 'members');
     },
     [],
     'recentResults',

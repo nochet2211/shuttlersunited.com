@@ -1,13 +1,13 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
-import { getAdminClient } from '../lib/pocketbase';
+import { db, first, getById, insert, remove, timestamp, update } from '../lib/db';
+import { deleteFile, storeFile } from '../lib/files';
 import { slugify } from '../lib/format';
 import type { Post } from '../lib/types';
 
 /**
- * Newsroom writes. The posts collection has every write rule set to null, so
- * these actions are the only way a story is created or changed — and each one
- * checks admin first.
+ * Newsroom writes. These actions are the only way a story is created or
+ * changed — and each one checks admin first.
  */
 function requireAdmin(locals: App.Locals): void {
   if (!locals.isAdmin) {
@@ -59,18 +59,18 @@ const storySchema = z.object({
 
 /**
  * "2026-08-30T09:00" (the editor's local wall clock, from a datetime-local
- * field) → "2026-08-30 03:30:00", the UTC shape PocketBase stores.
+ * field) → "2026-08-30 03:30:00.000Z", the stored UTC shape.
  *
- * The conversion has to happen: PocketBase appends a Z to whatever it is given,
- * so writing the local components straight through would file a story hours
- * away from when the editor said. StoryForm converts back on the way in.
+ * The conversion has to happen: writing the local components straight through
+ * would file a story hours away from when the editor said. StoryForm converts
+ * back on the way in.
  */
-function toPocketBaseDate(value: string | undefined): string {
+function toStoredDate(value: string | undefined): string {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) {
     throw new ActionError({ code: 'BAD_REQUEST', message: 'That publication date is not valid.' });
   }
-  return date.toISOString().slice(0, 19).replace('T', ' ');
+  return timestamp(date);
 }
 
 /**
@@ -79,15 +79,12 @@ function toPocketBaseDate(value: string | undefined): string {
  * an editor cannot act on.
  */
 async function uniqueSlug(title: string, ignoreId?: string): Promise<string> {
-  const pb = await getAdminClient();
   const base = slugify(title).slice(0, 140) || 'story';
 
   for (let suffix = 0; suffix < 50; suffix++) {
     const candidate = suffix === 0 ? base : `${base}-${suffix + 1}`;
-    const clash = await pb.collection('posts').getList<Post>(1, 1, {
-      filter: pb.filter('slug = {:slug}', { slug: candidate }),
-    });
-    if (clash.totalItems === 0 || clash.items[0]?.id === ignoreId) return candidate;
+    const clash = await first<Post>('posts', 'SELECT id FROM posts WHERE slug = ?', candidate);
+    if (!clash || clash.id === ignoreId) return candidate;
   }
 
   return `${base}-${Date.now()}`;
@@ -103,9 +100,9 @@ function recordFrom(input: z.infer<typeof storySchema>, slug: string, authorId?:
     body: input.body ?? '',
     source_name: input.source_name ?? '',
     source_url: input.source_url ?? '',
-    // PocketBase wants an empty string, not null, to clear a relation.
+    // An empty relation is '', never null.
     tournament: input.tournament || '',
-    published_at: toPocketBaseDate(input.published_at),
+    published_at: toStoredDate(input.published_at),
     status: input.status,
     is_pinned: input.is_pinned ?? false,
     ...(authorId ? { author: authorId } : {}),
@@ -114,12 +111,11 @@ function recordFrom(input: z.infer<typeof storySchema>, slug: string, authorId?:
 
 /** A cover is only written when one was actually chosen — an empty file input
  *  arrives as a zero-byte File, which would otherwise wipe the existing image. */
-async function attachCover(id: string, cover: File | undefined): Promise<void> {
+async function attachCover(post: Post, cover: File | undefined): Promise<void> {
   if (!cover || cover.size === 0) return;
-  const pb = await getAdminClient();
-  const form = new FormData();
-  form.append('cover', cover);
-  await pb.collection('posts').update(id, form);
+  const filename = await storeFile('posts', post.id, cover);
+  await update('posts', post.id, { cover: filename });
+  await deleteFile('posts', post.id, post.cover);
 }
 
 export const news = {
@@ -128,14 +124,11 @@ export const news = {
     input: storySchema,
     handler: async (input, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
 
       const slug = await uniqueSlug(input.title);
-      const created = await pb
-        .collection('posts')
-        .create<Post>(recordFrom(input, slug, context.locals.member?.id));
+      const created = await insert<Post>('posts', recordFrom(input, slug, context.locals.member?.id));
 
-      await attachCover(created.id, input.cover);
+      await attachCover(created, input.cover);
 
       return { ok: true, id: created.id, slug };
     },
@@ -146,16 +139,19 @@ export const news = {
     input: storySchema.extend({ id: z.string().min(1) }),
     handler: async ({ id, ...input }, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
+
+      const existing = await getById<Post>('posts', id);
+      if (!existing) {
+        throw new ActionError({ code: 'NOT_FOUND', message: 'That story no longer exists.' });
+      }
 
       // The slug only moves when the headline does, so a published URL that
       // someone has already shared survives a typo fix in the body.
-      const existing = await pb.collection('posts').getOne<Post>(id);
       const slug =
         existing.title === input.title ? existing.slug : await uniqueSlug(input.title, id);
 
-      await pb.collection('posts').update(id, recordFrom(input, slug));
-      await attachCover(id, input.cover);
+      await update('posts', id, recordFrom(input, slug));
+      await attachCover(existing, input.cover);
 
       return { ok: true, slug };
     },
@@ -166,8 +162,7 @@ export const news = {
     input: z.object({ id: z.string().min(1), status: z.enum(['draft', 'published']) }),
     handler: async ({ id, status }, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
-      await pb.collection('posts').update(id, { status });
+      await update('posts', id, { status });
       return { ok: true };
     },
   }),
@@ -181,18 +176,15 @@ export const news = {
     input: z.object({ id: z.string().min(1), pinned: z.coerce.boolean() }),
     handler: async ({ id, pinned }, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
 
       if (pinned) {
-        const currentlyPinned = await pb
-          .collection('posts')
-          .getFullList<Post>({ filter: 'is_pinned = true', fields: 'id' });
-        for (const post of currentlyPinned) {
-          if (post.id !== id) await pb.collection('posts').update(post.id, { is_pinned: false });
-        }
+        await db()
+          .prepare('UPDATE posts SET is_pinned = 0, updated = ? WHERE is_pinned = 1 AND id != ?')
+          .bind(timestamp(), id)
+          .run();
       }
 
-      await pb.collection('posts').update(id, { is_pinned: pinned });
+      await update('posts', id, { is_pinned: pinned });
       return { ok: true };
     },
   }),
@@ -202,8 +194,14 @@ export const news = {
     input: z.object({ id: z.string().min(1) }),
     handler: async ({ id }, context) => {
       requireAdmin(context.locals);
-      const pb = await getAdminClient();
-      await pb.collection('posts').delete(id);
+
+      const post = await getById<Post>('posts', id);
+      if (post) {
+        await remove('posts', id);
+        await Promise.all(
+          [post.cover, ...(post.attachments ?? [])].map((file) => deleteFile('posts', id, file)),
+        );
+      }
       return { ok: true };
     },
   }),

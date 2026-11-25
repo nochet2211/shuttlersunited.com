@@ -3,7 +3,7 @@
 Badminton club site for Shuttlers United — player profiles, tournament records,
 court booking, WhatsApp OTP login, and monthly dues via Razorpay.
 
-**Stack:** Astro 7 (SSR, Node adapter) · Tailwind v4 · PocketBase · Razorpay · Gupshup (WhatsApp)
+**Stack:** Astro 7 (SSR on Cloudflare Workers) · Tailwind v4 · Cloudflare D1 + R2 · Razorpay · Gupshup (WhatsApp)
 
 ---
 
@@ -11,36 +11,45 @@ court booking, WhatsApp OTP login, and monthly dues via Razorpay.
 
 ```bash
 npm install
-cp .env.example .env          # then fill in the secrets (see below)
+cp .env.example .env          # then fill in the secret (see below)
 
-npm run pb                    # terminal 1 — PocketBase on :8090
-npm run pb:setup -- --seed    # once — creates collections, rules and demo data
-npm run dev                   # terminal 2 — Astro on :4321
+npm run db:migrate            # once — creates the tables in a local D1
+npm run db:import             # once — loads the club's data from pb_data/ (see below)
+npm run dev                   # Astro on :4321, with local D1 and R2
 ```
 
-The PocketBase admin UI is at <http://127.0.0.1:8090/_/>.
+Local D1 and R2 live in `.wrangler/state/`. To look at the data:
+`npx wrangler d1 execute shuttlersunited --local --command "SELECT name FROM members"`.
 
 ### Secrets
 
-Generate the two required ones with `openssl rand -base64 48`:
+Generate the one required secret with `openssl rand -base64 48`:
 
 | Variable | Notes |
 |---|---|
 | `AUTH_COOKIE_SECRET` | Signs session cookies. Rotating it logs everyone out. |
-| `MEMBER_PASSWORD_SECRET` | Derives each member's PocketBase password. **Long-lived** — rotating it locks every member out until passwords are re-derived. |
 
 Gupshup and Razorpay variables are optional. Leave them blank and:
 
-- **OTPs print to the server log** instead of sending on WhatsApp, and also appear
-  on the login page, so the whole auth flow is testable with no accounts set up.
+- **OTPs print to the server log** instead of sending on WhatsApp. In local dev
+  they also appear on the login page, so the whole auth flow is testable with no
+  accounts set up. In production they are only in the Worker's logs
+  (`npx wrangler tail`) — showing them on the page would let anyone sign in as
+  any number.
 - **Online payments are disabled**, but admins can still record cash and UPI
   payments by hand.
 
 ### First admin
 
-Everyone signs up as a `member`. Promote yourself once, from the PocketBase
-admin UI (`members` → your record → `role: admin`), and after that you can
-grant admin to others from `/admin/members`.
+Everyone signs up as a `member`. Sign up, then promote yourself once (drop
+`--remote` for the local database):
+
+```bash
+npx wrangler d1 execute shuttlersunited --remote \
+  --command "UPDATE members SET role = 'admin' WHERE phone = '+919876543210'"
+```
+
+After that you can grant admin to others from `/admin/members`.
 
 ---
 
@@ -51,31 +60,25 @@ grant admin to others from `/admin/members`.
 Members type a mobile number and a 6-digit code. There is no password anywhere
 in the UI.
 
-Under the hood PocketBase still needs a password to issue a refreshable auth
-token and to make its per-record API rules meaningful. So each member's password
-is **derived** — `HMAC(MEMBER_PASSWORD_SECRET, memberId)` — never stored in
-plaintext, never shown, recomputed on demand. PocketBase only holds its bcrypt
-hash. See `src/lib/member-password.ts`.
-
-The session itself is the PocketBase auth token, HMAC-signed and held in an
-`httpOnly` cookie. Every request re-validates it against PocketBase, so
-deactivating a member takes effect immediately rather than whenever their token
-happens to expire.
+The session is a signed cookie: the member's id and an expiry, HMAC-signed with
+`AUTH_COOKIE_SECRET` and held `httpOnly`. Every request loads the member from
+the database, so deactivating a member takes effect immediately rather than
+whenever their cookie happens to expire.
 
 OTP codes are stored only as salted SHA-256 hashes, expire after 10 minutes,
 allow 5 attempts, and are rate-limited to 5 per hour with a 60-second resend
 cooldown.
 
-### Authorization — two layers
+### Authorization — in the server, nowhere else
 
-1. **PocketBase API rules** (`scripts/setup-pocketbase.mjs`) are the backstop for
-   anything hitting PocketBase directly.
-2. **Astro actions** (`src/actions/`) do the real work using the superuser
-   client, and therefore carry their own ownership checks.
+The browser never talks to the database. D1 is reachable only through the
+Worker's binding, so there are no per-row API rules to lean on: **Astro actions**
+(`src/actions/`) and the read helpers (`src/lib/queries.ts`) carry their own
+ownership and visibility checks.
 
-The rule that matters most: **`payments` has `createRule`, `updateRule` and
-`deleteRule` all set to `null`.** Nothing outside the server can write to the
-ledger — a member marking their own dues paid is the threat model. Members can
+The rule that matters most: **only server code writes to `payments`.** There is
+no action that lets a member touch a ledger row except through the Razorpay
+flow — a member marking their own dues paid is the threat model. Members can
 only *read* their own rows.
 
 Each action's Zod `input` schema doubles as a field allow-list. `profile.update`
@@ -119,23 +122,52 @@ Amounts are **always in paise**. Rupees exist only for display.
       `https://shuttlersunited.com/api/webhooks/razorpay`, subscribe to
       `payment.captured`, `payment.failed` and `refund.processed`, and set
       `RAZORPAY_WEBHOOK_SECRET` to match.
-- [ ] Set strong `POCKETBASE_ADMIN_PASSWORD` and fresh secrets in production.
-- [ ] Back up `pb_data/` on a schedule — it is the entire database.
+- [ ] D1 keeps 30 days of point-in-time recovery (`wrangler d1 time-travel`).
+      For anything older, export on a schedule:
+      `npx wrangler d1 export shuttlersunited --remote --output backup.sql`.
 
 ## Deploying
 
-PocketBase needs persistent disk, so both processes want to live on one small
-VPS (Hetzner/DigitalOcean, ~₹500/month):
+One Worker, **`shuttlersunited`**, on the Workers **free plan**:
+
+- **D1** (`DB`) holds the data. Schema in `migrations/`.
+- **R2** (`FILES`, bucket `shuttlersunited-files`) holds uploads — avatars,
+  post covers and attachments — served same-origin by `src/pages/files/[...path].ts`.
+- **Images** (`IMAGES`) makes the thumbnails (`?thumb=200x200`), cached at the
+  edge after the first request. The free tier covers 5,000 unique
+  transformations a month; past that, the original is served instead.
+
+Free-plan limits worth knowing: 10 ms of CPU per request (pages measure
+6–20 ms; short bursts over are tolerated, sustained ones fail), 100,000 requests
+a day, and D1's 5 GB / 5 million reads a day.
+
+One-time setup:
 
 ```bash
-npm run build
-npm start                     # Astro on :4321
-./pocketbase serve --http=127.0.0.1:8090
+npx wrangler login
+npm run db:migrate:remote           # create the tables
+npm run db:import:remote            # load pb_data/ (the club's data) into D1 and R2
+npx wrangler secret put AUTH_COOKIE_SECRET
+# …and the GUPSHUP_* / RAZORPAY_* ones once those accounts are live
 ```
 
-Put Caddy or nginx in front for TLS, proxying `/` to Astro. Keep PocketBase
-bound to `127.0.0.1` — the app talks to it locally and it needs no public port.
-Run both under systemd so they restart on boot.
+Then:
+
+```bash
+npm run preview               # build, then run the real Worker locally (workerd) on :8787
+npm run deploy                # build and deploy
+```
+
+A schema change is a new file in `migrations/`, applied with
+`npm run db:migrate` and `npm run db:migrate:remote` before deploying.
+
+`scripts/import-pocketbase.mjs` is the one-time move off PocketBase. It empties
+each table before loading it, so re-running it against production **replaces
+live data** with whatever is in `pb_data/`.
+
+For CI, connect the repo in the dashboard (Workers → Create → Import a
+repository) with build command `npm run build` and deploy command
+`npx wrangler deploy`.
 
 ---
 
@@ -161,19 +193,19 @@ an editor types can inject markup into the page (`renderPostBody` in
 `src/lib/news.ts`).
 
 Only one story can be pinned as the top story; pinning one clears the last.
-Drafts are invisible everywhere except `/admin/news` — the collection's read
-rule is `status = "published"`, and the query helpers repeat that filter because
-they read through the superuser client.
+Drafts are invisible everywhere except `/admin/news` — every public query
+filters on `status = 'published'`.
 
 ## Layout
 
 ```
-scripts/setup-pocketbase.mjs   Schema, API rules and seed data (idempotent)
+migrations/                   D1 schema
+scripts/import-pocketbase.mjs  One-time import of pb_data/ into D1 and R2
 src/
   actions/       auth · profile · bookings · payments · admin · news
   components/    ui/ primitives · site/ chrome · news/ feed · tournament/ draw
   layouts/       Layout (public) · AppLayout (dashboard + admin)
-  lib/           pocketbase · auth · otp · razorpay · queries · news · format · types
+  lib/           db · files · auth · otp · razorpay · queries · news · format · types
   middleware.ts  Session resolution and route guards
   pages/
     index.astro  The newsroom — the home page IS the news feed

@@ -77,7 +77,7 @@ const isDoubles = event !== "MS" && event !== "WS";
             return (
               <tr class="border-b border-hairline-soft last:border-0">
                 <td class="px-4 py-2.5 text-[12px] leading-4 text-faint tabular-nums">
-                  {/* PocketBase returns an unset number as 0. */}
+                  {/* An unset number is stored as 0. */}
                   {entry.seed || "—"}
                 </td>
                 <td class="px-2 py-2.5">

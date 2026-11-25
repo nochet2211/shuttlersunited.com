@@ -11,7 +11,7 @@ import type {
 /**
  * Club offices, most senior first. The order is the roster order: office
  * bearers lead the members list by rank, and everyone else follows by name.
- * Mirrors the `office` select in scripts/setup-pocketbase.mjs.
+ * Mirrors the values the `office` column holds (migrations/0001_init.sql).
  */
 export const OFFICES: Office[] = [
   'President',

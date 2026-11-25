@@ -7,27 +7,25 @@ import Button from "../../components/ui/Button.astro";
 import Alert from "../../components/ui/Alert.astro";
 import Empty from "../../components/ui/Empty.astro";
 import { actions, isInputError } from "astro:actions";
-import { getAdminClient } from "../../lib/pocketbase";
+import { all, expand } from "../../lib/db";
 import { money, periodKey, periodLabel, shortDate } from "../../lib/format";
 import type { Member, Payment, PaymentStatus } from "../../lib/types";
 
 const result = Astro.getActionResult(actions.admin.recordManualPayment);
 const fieldErrors = isInputError(result?.error) ? result.error.fields : {};
 
-const pb = await getAdminClient();
-
 const [members, ledger] = await Promise.all([
-  pb
-    .collection("members")
-    .getFullList<Member>({ filter: 'status ="active"', sort: "name" }),
-  pb.collection("payments").getList<Payment>(1, 100, {
-    filter: 'status !="created"',
-    expand: "member",
-    sort: "-created",
-  }),
+  all<Member>(
+    "members",
+    "SELECT * FROM members WHERE status = 'active' ORDER BY name",
+  ),
+  all<Payment>(
+    "payments",
+    "SELECT * FROM payments WHERE status != 'created' ORDER BY created DESC LIMIT 100",
+  ),
 ]);
 
-const rows = ledger.items;
+const rows = await expand(ledger, "member", "members");
 
 // Reconciliation totals: what the gateway settled vs what came in offline.
 const gateway = rows.filter(

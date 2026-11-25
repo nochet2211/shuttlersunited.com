@@ -1,9 +1,7 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
-import { getAdminClient, isNotFound } from '../lib/pocketbase';
+import { first, insert } from '../lib/db';
 import { issueOtp, verifyOtp, OtpError } from '../lib/otp';
-import { derivePassword, generateMemberId } from '../lib/member-password';
-import { MEMBER_PASSWORD_SECRET } from 'astro:env/server';
 import {
   startSession,
   clearSessionCookie,
@@ -29,32 +27,17 @@ function toActionError(error: unknown): ActionError {
   });
 }
 
-async function findMemberByPhone(phone: string): Promise<Member | null> {
-  const pb = await getAdminClient();
-  try {
-    return await pb
-      .collection('members')
-      .getFirstListItem<Member>(pb.filter('phone = {:phone}', { phone }));
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    throw error;
-  }
-}
+const findMemberByPhone = (phone: string) =>
+  first<Member>('members', 'SELECT * FROM members WHERE phone = ?', phone);
 
 /** Ensures the slug is unique by suffixing a counter only when it collides. */
 async function uniqueSlug(name: string): Promise<string> {
-  const pb = await getAdminClient();
   const base = slugify(name) || 'player';
 
   for (let suffix = 0; suffix < 50; suffix++) {
     const candidate = suffix === 0 ? base : `${base}-${suffix + 1}`;
-    try {
-      await pb
-        .collection('members')
-        .getFirstListItem(pb.filter('slug = {:slug}', { slug: candidate }));
-    } catch (error) {
-      if (isNotFound(error)) return candidate;
-      throw error;
+    if (!(await first('members', 'SELECT id FROM members WHERE slug = ?', candidate))) {
+      return candidate;
     }
   }
 
@@ -108,7 +91,7 @@ export const auth = {
         });
       }
 
-      await startSession(context.cookies, member.id, verifiedPhone);
+      startSession(context.cookies, member.id);
       clearVerifiedPhone(context.cookies);
       return { status: 'signed-in' as const, name: member.name };
     },
@@ -144,16 +127,8 @@ export const auth = {
         });
       }
 
-      const pb = await getAdminClient();
-      // Mint the id first so the derived password can be computed for `create`.
-      const id = generateMemberId();
-      const password = derivePassword(id, MEMBER_PASSWORD_SECRET);
-
-      await pb.collection('members').create({
-        id,
+      const member = await insert<Member>('members', {
         phone,
-        password,
-        passwordConfirm: password,
         name: input.name,
         slug: await uniqueSlug(input.name),
         role: 'member',
@@ -163,15 +138,13 @@ export const auth = {
         status: 'active',
         city: input.city || '',
         gender: input.gender,
-        date_of_birth: input.date_of_birth || null,
+        date_of_birth: input.date_of_birth || '',
         skill_level: input.skill_level ?? 'beginner',
         is_public: input.is_public ?? true,
         joined_on: dateKey(),
-        emailVisibility: false,
-        verified: true,
       });
 
-      await startSession(context.cookies, id, phone);
+      startSession(context.cookies, member.id);
       clearVerifiedPhone(context.cookies);
 
       return { status: 'signed-in' as const };

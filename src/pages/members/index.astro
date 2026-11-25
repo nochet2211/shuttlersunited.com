@@ -154,7 +154,7 @@ const subtitle = (member: (typeof members)[number]) =>
                             {subtitle(member)}
                           </p>
                         )}
-                        {/* PocketBase returns an unset number as 0, so 0 means none. */}
+                        {/* An unset number is stored as 0, so 0 means none. */}
                         {Boolean(member.jersey_number) && (
                           <p class="text-[12px] leading-4 text-faint">
                             #{member.jersey_number}

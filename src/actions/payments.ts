@@ -1,6 +1,7 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
-import { getAdminClient, isNotFound } from '../lib/pocketbase';
+import { first, getById, insert, timestamp, update } from '../lib/db';
+import { findDuesPayment } from '../lib/queries';
 import { createOrder, verifyPaymentSignature, isRazorpayConfigured } from '../lib/razorpay';
 import { periodKey } from '../lib/format';
 import { RAZORPAY_KEY_ID } from 'astro:env/server';
@@ -37,17 +38,11 @@ export const payments = {
         });
       }
 
-      const pb = await getAdminClient();
       const period = input.period ?? periodKey();
 
-      let plan: MembershipPlan;
-      try {
-        plan = await pb.collection('membership_plans').getOne<MembershipPlan>(input.plan);
-      } catch (error) {
-        if (isNotFound(error)) {
-          throw new ActionError({ code: 'NOT_FOUND', message: 'That plan no longer exists.' });
-        }
-        throw error;
+      const plan = await getById<MembershipPlan>('membership_plans', input.plan);
+      if (!plan) {
+        throw new ActionError({ code: 'NOT_FOUND', message: 'That plan no longer exists.' });
       }
 
       if (!plan.is_active) {
@@ -55,20 +50,14 @@ export const payments = {
       }
 
       // Don't let a member pay the same month twice.
-      const settled = await pb.collection('payments').getList<Payment>(1, 1, {
-        filter: pb.filter(
-          'member = {:member} && type = "membership" && period = {:period} && status = "paid"',
-          { member: member.id, period },
-        ),
-      });
-      if (settled.totalItems > 0) {
+      if (await findDuesPayment(member.id, period)) {
         throw new ActionError({
           code: 'CONFLICT',
           message: 'Dues for this month are already settled.',
         });
       }
 
-      const record = await pb.collection('payments').create<Payment>({
+      const record = await insert<Payment>('payments', {
         member: member.id,
         plan: plan.id,
         type: 'membership',
@@ -95,7 +84,7 @@ export const payments = {
           },
         });
 
-        await pb.collection('payments').update(record.id, {
+        await update('payments', record.id, {
           razorpay_order_id: order.id,
           status: 'attempted',
         });
@@ -111,7 +100,7 @@ export const payments = {
           planName: plan.name,
         };
       } catch (error) {
-        await pb.collection('payments').update(record.id, {
+        await update('payments', record.id, {
           status: 'failed',
           failure_reason: 'Could not create the Razorpay order.',
         });
@@ -137,7 +126,6 @@ export const payments = {
     }),
     handler: async (input, context) => {
       const member = requireMember(context.locals);
-      const pb = await getAdminClient();
 
       const valid = verifyPaymentSignature(
         input.razorpay_order_id,
@@ -153,18 +141,13 @@ export const payments = {
         });
       }
 
-      let record: Payment;
-      try {
-        record = await pb
-          .collection('payments')
-          .getFirstListItem<Payment>(
-            pb.filter('razorpay_order_id = {:order}', { order: input.razorpay_order_id }),
-          );
-      } catch (error) {
-        if (isNotFound(error)) {
-          throw new ActionError({ code: 'NOT_FOUND', message: 'That payment is not on record.' });
-        }
-        throw error;
+      const record = await first<Payment>(
+        'payments',
+        'SELECT * FROM payments WHERE razorpay_order_id = ?',
+        input.razorpay_order_id,
+      );
+      if (!record) {
+        throw new ActionError({ code: 'NOT_FOUND', message: 'That payment is not on record.' });
       }
 
       if (record.member !== member.id) {
@@ -173,11 +156,11 @@ export const payments = {
 
       // The webhook may have landed first; never walk a settled row backwards.
       if (record.status !== 'paid') {
-        await pb.collection('payments').update(record.id, {
+        await update('payments', record.id, {
           status: 'paid',
           razorpay_payment_id: input.razorpay_payment_id,
           razorpay_signature: input.razorpay_signature,
-          paid_at: new Date().toISOString().replace('T', ' '),
+          paid_at: timestamp(),
         });
       }
 

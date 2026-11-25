@@ -11,7 +11,7 @@ import Alert from "../../../components/ui/Alert.astro";
 import Button from "../../../components/ui/Button.astro";
 import Empty from "../../../components/ui/Empty.astro";
 import { actions } from "astro:actions";
-import { getAdminClient } from "../../../lib/pocketbase";
+import { all } from "../../../lib/db";
 import { categoryLabel } from "../../../lib/news";
 import { shortDate } from "../../../lib/format";
 import type { Post } from "../../../lib/types";
@@ -21,10 +21,10 @@ const pinResult = Astro.getActionResult(actions.news.setPinned);
 const deleteResult = Astro.getActionResult(actions.news.deletePost);
 const error = statusResult?.error ?? pinResult?.error ?? deleteResult?.error;
 
-const pb = await getAdminClient();
-const posts = await pb
-  .collection("posts")
-  .getFullList<Post>({ sort: "-is_pinned,-published_at" });
+const posts = await all<Post>(
+  "posts",
+  "SELECT * FROM posts ORDER BY is_pinned DESC, published_at DESC",
+);
 
 const drafts = posts.filter((post) => post.status === "draft").length;
 ---

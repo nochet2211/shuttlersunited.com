@@ -86,7 +86,7 @@ export const postCover = (post: Post, thumb = '1200x630'): string | null =>
   fileUrl('posts', post.id, post.cover, thumb);
 
 /**
- * A post's attachments, each with a readable name. PocketBase stores
+ * A post's attachments, each with a readable name. Storage holds
  * "registration_form_x7k2m9q1ab.pdf"; readers see "Registration form". Images
  * are shown on the page as photos; anything else is offered as a download.
  */
@@ -112,8 +112,8 @@ export function postAttachments(post: Post): PostAttachment[] {
     return [
       {
         url,
-        // ?download=1 makes PocketBase send it as an attachment: the files
-        // live on another origin, where the <a download> attribute is ignored.
+        // ?download=1 makes the file route send it as an attachment, with
+        // the stored filename rather than whatever the browser would pick.
         downloadUrl: `${url}?download=1`,
         name: base.charAt(0).toUpperCase() + base.slice(1),
         type,
