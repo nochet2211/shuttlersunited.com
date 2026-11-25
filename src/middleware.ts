@@ -2,7 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { resolveMember, isAdmin } from './lib/auth';
 
 /** Route prefixes that require a signed-in member, and those that require an admin. */
-const MEMBER_ROUTES = ['/dashboard', '/book'];
+const MEMBER_ROUTES = ['/dashboard'];
 const ADMIN_ROUTES = ['/admin'];
 
 const startsWithAny = (path: string, prefixes: string[]) =>

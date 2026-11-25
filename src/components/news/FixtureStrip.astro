@@ -70,12 +70,14 @@ const scoreline = (match: Match) =>
         )}
 
         {fixtures.length > 0 && (
-          <div class="flex min-w-0 items-center gap-3 overflow-x-auto">
+          <div class="flex min-w-0 items-center gap-3">
             <span class="shrink-0 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
               Fixtures
             </span>
 
-            <ul class="flex min-w-0 items-center gap-1">
+            {/* The list scrolls inside its own box, so a run of fixtures can
+                never slide under the "All fixtures" link beside it. */}
+            <ul class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
               {fixtures.map((fixture) => (
                 <li class="shrink-0">
                   <a

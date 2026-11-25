@@ -1,281 +1,196 @@
 ---
 /**
- * The home page is the club's newsroom — all published news sorted by time,
- * pinned stories first. What is happening right now, what is coming, and
- * anything from the associations that changes how you enter a tournament.
- * The membership pitch lives on /join; a visitor who lands here wants news,
- * and a returning member wants to know what changed.
+ * Temporary landing page for the 9th Dimapur District Interclub, which the
+ * club is organising. The newsroom that normally lives here has moved to /news
+ * for the duration; when the tournament is over, delete this file and move
+ * src/pages/news/index.astro back here.
+ *
+ * The poster carries the event's own artwork, so the page around it stays
+ * quiet: no gradient mesh, no indigo, just the details in real text so they
+ * can be read, searched and copied. Phones get the portrait poster, whose
+ * lettering survives a narrow screen; wider screens get the landscape banner.
  */
+import { getImage } from "astro:assets";
 import Layout from "../layouts/Layout.astro";
 import Button from "../components/ui/Button.astro";
-import Badge from "../components/ui/Badge.astro";
-import Empty from "../components/ui/Empty.astro";
-import FixtureStrip from "../components/news/FixtureStrip.astro";
-import PostCard from "../components/news/PostCard.astro";
-import Rail from "../components/news/Rail.astro";
-import {
-  clubStats,
-  duesStatusFor,
-  fixtureBoard,
-  listLiveMatches,
-  listPosts,
-  recentResults,
-} from "../lib/queries";
-import { RESULT_LABELS } from "../lib/tournament";
-import { dateRange, fixtureTiming } from "../lib/news";
-import { periodLabel } from "../lib/format";
+import Eyebrow from "../components/ui/Eyebrow.astro";
+import CommitteeCarousel from "../components/event/CommitteeCarousel.astro";
+import banner from "../assets/interclub-2026.jpeg";
+import portrait from "../assets/interclub-2026-portrait.jpeg";
 
-const { member } = Astro.locals;
+const event = {
+  name: "9th Dimapur District Interclub Badminton Tournament 2026",
+  dates: "27–28 November 2026",
+  venue: "Livingstone Foundation College Indoor Stadium",
+  locality: "Landmark Colony, Dimapur",
+  organiser:
+    "Shuttlers United, under the aegis of the Dimapur District Badminton Association",
+  memorial: "Late Shri. Mayang Lima",
+  partners: ["State Bank of India", "Anil Steel"],
+  categories: [
+    "75+ (min age 35)",
+    "85+ (min age 40)",
+    "95+ (min age 45)",
+    "105+ (min age 45)",
+  ],
+  prizes: "Rs. 72,000 in total, plus certificates, medals and souvenirs",
+};
 
-const [posts, board, live, results, stats] = await Promise.all([
-  listPosts(),
-  fixtureBoard(),
-  listLiveMatches(),
-  recentResults(4),
-  clubStats(),
-]);
+// Status is worked out on Dimapur's calendar, not the server's, so the line
+// flips at local midnight.
+const today = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+}).format(new Date());
+const daysToGo = Math.round(
+  (Date.parse("2026-11-27") - Date.parse(today)) / 86_400_000,
+);
+const status =
+  today > "2026-11-28"
+    ? "Concluded"
+    : daysToGo <= 0
+      ? "Happening now"
+      : daysToGo === 1
+        ? "Starts tomorrow"
+        : `Starts in ${daysToGo} days`;
 
-// The rail's member card only makes sense for someone signed in, so the dues
-// read is conditional rather than part of the batch above.
-const dues = member ? await duesStatusFor(member.id) : null;
+// The committee cards, in the order the club supplied them. Each name and role
+// is copied from its card, so the alt text says what the image says.
+const cards = import.meta.glob<{ default: ImageMetadata }>(
+  "../assets/committee/*.jpeg",
+  { eager: true },
+);
+const committee = [
+  { name: "Tali Pongener", role: "Convenor, Planning Committee" },
+  { name: "Moanungsang", role: "Member, Planning Committee" },
+  { name: "Temjentoshi Jamir", role: "Member, Planning Committee" },
+  { name: "Bendangnungsang Ao", role: "Fin. Secy., Shuttlers United" },
+  { name: "Richard A", role: "Member, Planning Committee" },
+  { name: "Dr. Chubakumzuk Longchar", role: "Treasurer, Shuttlers United" },
+  { name: "Raj Kumar Das", role: "Member, Planning Committee" },
+  { name: "P Bendangmongba", role: "Fin. Secy., Planning Committee" },
+  { name: "Dr. Imkongkumzuk", role: "Member, Planning Committee" },
+  { name: "Repentsung", role: "Member, Planning Committee" },
+  { name: "Temjennungsang", role: "Finance, Shuttlers United" },
+  { name: "Temjen Lemtur", role: "Secretary, Planning Committee" },
+  { name: "Imlitemjen", role: "Finance, Shuttlers United" },
+  { name: "Dr. I Allong Nikdir", role: "Medical/Physio, Shuttlers United" },
+].map((person, index) => ({
+  ...person,
+  image:
+    cards[`../assets/committee/${String(index + 1).padStart(2, "0")}.jpeg`]
+      .default,
+}));
 
-const numbers = [
-  { value: stats.members || "—", label: "Active members" },
-  { value: stats.tournaments || "—", label: "Tournaments" },
-  { value: stats.titles || "—", label: "Titles" },
+const details = [
+  { term: "Dates", value: event.dates },
+  { term: "Venue", value: `${event.venue}, ${event.locality}` },
+  { term: "Categories", value: event.categories },
+  { term: "Prize money", value: event.prizes },
+  { term: "Organised by", value: event.organiser },
+  { term: "Event partners", value: event.partners.join(" · ") },
 ];
 
-// The pinned story leads the page as a feature panel; the rest run as rows.
-// listPosts() already sorts pinned-first, so the lead is the head of the list
-// when it is pinned at all.
-const lead = posts[0]?.is_pinned ? posts[0] : null;
-const rest = lead ? posts.slice(1) : posts;
+// Art direction: <Picture> serves one image at many sizes, but this needs two
+// different crops, so the <picture> is assembled by hand from getImage().
+const crops = [
+  { media: "(max-width: 639px)", image: portrait, widths: [480, 899] },
+  { media: undefined, image: banner, widths: [1024, 1600] },
+];
+const sources = await Promise.all(
+  crops.flatMap((crop) =>
+    (["avif", "webp"] as const).map(async (format) => {
+      const { srcSet } = await getImage({
+        src: crop.image,
+        format,
+        widths: crop.widths,
+      });
+      return {
+        media: crop.media,
+        type: `image/${format}`,
+        srcset: srcSet.attribute,
+        // Per-source dimensions, so a phone reserves the portrait's height.
+        width: crop.image.width,
+        height: crop.image.height,
+      };
+    }),
+  ),
+);
+const fallback = await getImage({ src: banner, format: "jpg", width: 1600 });
 ---
 
 <Layout
-  title="Shuttlers United"
-  description="Club news from Shuttlers United, Dimapur — fixtures, results, court notices and circulars from the badminton associations."
+  title="Interclub 2026"
+  description={`${event.name} — ${event.dates} at ${event.venue}, ${event.locality}. Organised by Shuttlers United.`}
   bleed
 >
-  <FixtureStrip ongoing={board.ongoing} upcoming={board.upcoming} live={live} />
-
-  {
-    /* The masthead. DESIGN.md puts an atmospheric gradient mesh across the
-       upper third of a marketing page; this is that surface, and it is what
-       gives the page a chromatic opening instead of a grey strip and a list. */
-  }
-  <section class="mesh-fade border-b border-hairline-soft">
-    <div class="shell flex flex-col gap-6 pt-12 pb-10 md:pt-16 md:pb-12">
-      <div class="flex max-w-[52ch] flex-col gap-4">
-        <p
-          class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
-        >
-          Dimapur, Nagaland
-        </p>
-        <h1 class="hero-display text-ink">Shuttlers United</h1>
-        <p class="subtitle-lg text-body">
-          Three courts, six days a week. Club news, fixtures and results — plus
-          dues you can settle in ten seconds.
-        </p>
+  <section class="shell pt-6 md:pt-10">
+    <figure class="card overflow-hidden p-0">
+      <picture>
         {
-          !member && (
-            <div class="mt-1 flex flex-wrap items-center gap-3">
-              <Button href="/join" variant="buy">
-                Join the club
-              </Button>
-              <Button href="/tournaments" variant="secondary">
-                See fixtures
-              </Button>
-            </div>
-          )
-        }
-      </div>
-
-      {/* The club's numbers, on tinted lozenges rather than bare text. */}
-      <dl class="grid max-w-lg grid-cols-3 gap-3">
-        {
-          numbers.map((item) => (
-            <div class="stat-tile flex flex-col gap-0.5 px-4 py-3">
-              <dd class="heading-md text-ink">{item.value}</dd>
-              <dt class="text-[12px] leading-4 text-mute">{item.label}</dt>
-            </div>
+          sources.map((source) => (
+            <source {...source} sizes="(min-width: 1280px) 1200px, 100vw" />
           ))
         }
-      </dl>
-    </div>
+        <img
+          src={fallback.src}
+          width={banner.width}
+          height={banner.height}
+          alt={`${event.name}, organised by Shuttlers United under the aegis of DDBA, in memory of ${event.memorial}. ${event.dates}, ${event.venue}, ${event.locality}. Categories ${event.categories.join(", ")}. Total prize money Rs. 72,000. Event partners: SBI and Anil Steel.`}
+          class="block h-auto w-full"
+          loading="eager"
+          fetchpriority="high"
+        />
+      </picture>
+    </figure>
   </section>
 
-  {/* ------------------------------------------------------- feed + rail */}
+  {
+    /* On wide screens the details card spans both rows of the right column,
+       and the committee fills the left column under the intro, so neither
+       side leaves a hole. The card stretches to the column's height and its
+       rows share the extra space, so both columns end on the same line. Source order (intro, details, committee) is also
+       the phone order. */
+  }
   <section
-    class="shell grid gap-8 pt-8 pb-20 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10 md:pb-24"
+    class="shell grid gap-8 pt-10 pb-20 md:pb-24 lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:gap-y-14"
   >
-    {/* --------------------------------------------------------- feed */}
-    <div class="flex min-w-0 flex-col gap-5">
-      <div class="border-b border-hairline-soft pb-3">
-        <h2
-          class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+    <div class="flex max-w-[60ch] flex-col gap-4">
+      <Eyebrow>{status}</Eyebrow>
+      <h1 class="heading-lg text-ink">{event.name}</h1>
+      <p class="subtitle-md text-body">
+        Clubs from across Dimapur meet for two days of interclub badminton,
+        hosted by Shuttlers United in memory of {event.memorial}.
+      </p>
+      <div class="mt-2 flex flex-wrap items-center gap-3">
+        <Button href="/tournaments/dimapur-interclub-2026" variant="primary"
+          >See the draw</Button
         >
-          Latest
-        </h2>
+        <Button href="/news" variant="secondary">Club news</Button>
       </div>
-
-      {
-        posts.length > 0 ? (
-          <div class="flex flex-col gap-4">
-            {lead && <PostCard post={lead} variant="feature" class="mb-1" />}
-            {rest.map((post) => (
-              <PostCard post={post} />
-            ))}
-          </div>
-        ) : (
-          <Empty title="Nothing published yet">
-            Once the club posts its first story it appears here, along with the
-            fixture list and the latest results.
-            <Button
-              slot="action"
-              href="/tournaments"
-              variant="secondary"
-              size="sm"
-            >
-              Browse tournaments
-            </Button>
-          </Empty>
-        )
-      }
     </div>
 
-    {/* --------------------------------------------------------- rail */}
-    <aside class="flex min-w-0 flex-col gap-5">
+    <dl class="card flex flex-col divide-y divide-hairline-soft lg:row-span-2">
       {
-        /* A signed-in member's own state comes first — it is the one thing on
-          this page only they can act on. */
-      }
-      {
-        member && dues && (
-          <Rail
-            title="Your dues"
-            href="/dashboard/payments"
-            linkLabel="Open"
-            accent="bg-cat-club"
-            accentTint="bg-cat-club-tint"
-          >
-            <div class="flex flex-col gap-3 p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-[14px] leading-5 text-body">
-                  {periodLabel(dues.period)}
-                </span>
-                <Badge tone={dues.paid ? "neutral" : "ink"}>
-                  {dues.paid ? "Settled" : "Due"}
-                </Badge>
-              </div>
-              {!dues.paid && (
-                <Button href="/dashboard/payments" variant="buy" size="sm" full>
-                  Pay this month
-                </Button>
-              )}
-            </div>
-          </Rail>
-        )
-      }
-
-      {/* ------------------------------------------------------ up next */}
-      <Rail
-        title="Up next"
-        href="/tournaments"
-        accent="bg-cat-tournament"
-        accentTint="bg-cat-tournament-tint"
-      >
-        {
-          board.upcoming.length > 0 || board.ongoing.length > 0 ? (
-            <ul class="divide-y divide-hairline-soft">
-              {[...board.ongoing, ...board.upcoming]
-                .slice(0, 4)
-                .map((fixture) => (
-                  <li>
-                    <a
-                      href={`/tournaments/${fixture.slug}`}
-                      class="group flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-soft"
-                    >
-                      <span class="text-[14px] font-medium leading-5 text-ink group-hover:underline">
-                        {fixture.name}
-                      </span>
-                      <span class="text-[12px] leading-4 text-faint">
-                        {fixtureTiming(fixture.start_date, fixture.end_date)}
-                        {" · "}
-                        {dateRange(fixture.start_date, fixture.end_date)}
-                      </span>
-                    </a>
-                  </li>
-                ))}
-            </ul>
-          ) : (
-            <p class="px-4 py-6 text-center text-[13px] leading-5 text-mute">
-              Nothing on the calendar right now.
-            </p>
-          )
-        }
-      </Rail>
-
-      {/* ----------------------------------------------- recent results */}
-      <Rail
-        title="Recent results"
-        href="/tournaments"
-        accent="bg-cat-result"
-        accentTint="bg-cat-result-tint"
-      >
-        {
-          results.length > 0 ? (
-            <ul class="divide-y divide-hairline-soft">
-              {results.map((entry) => (
-                <li class="flex items-start justify-between gap-3 px-4 py-3">
-                  <div class="flex min-w-0 flex-col gap-0.5">
-                    <a
-                      href={
-                        entry.expand?.member?.slug
-                          ? `/players/${entry.expand.member.slug}`
-                          : "/players"
-                      }
-                      class="truncate text-[14px] font-medium leading-5 text-ink hover:underline"
-                    >
-                      {entry.expand?.member?.name ?? "Club member"}
-                    </a>
-                    <span class="truncate text-[12px] leading-4 text-faint">
-                      {entry.event}
-                      {entry.expand?.tournament
-                        ? ` · ${entry.expand.tournament.name}`
-                        : ""}
-                    </span>
-                  </div>
-                  <span class="shrink-0 pt-0.5">
-                    <Badge tone={entry.result === "winner" ? "ink" : "neutral"}>
-                      {RESULT_LABELS[entry.result]}
-                    </Badge>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="px-4 py-6 text-center text-[13px] leading-5 text-mute">
-              No results recorded yet.
-            </p>
-          )
-        }
-      </Rail>
-
-      {
-        !member && (
-          <div class="cta-banner flex flex-col gap-3 p-5">
-            <p class="subtitle-lg text-ink">Play with us</p>
-            <p class="text-[14px] leading-[1.5] text-mute">
-              Three courts six days a week, coaching drills twice a week, and
-              dues you can settle in ten seconds.
-            </p>
-            <Button href="/join" class="mt-1">
-              Join the club
-            </Button>
+        details.map((item) => (
+          <div class="flex flex-col gap-1 px-5 py-4 lg:flex-1 lg:justify-center">
+            <dt class="text-[12px] uppercase leading-4 tracking-[0.06em] text-mute">
+              {item.term}
+            </dt>
+            {/* A list value gets one line per entry, so no item breaks mid-way. */}
+            {[item.value].flat().map((line) => (
+              <dd class="text-[15px] leading-6 text-ink">{line}</dd>
+            ))}
           </div>
-        )
+        ))
       }
-    </aside>
+    </dl>
+
+    {
+      /* -mb-2 cancels the track's scrollbar padding, so the cards' bottom edge
+         is the one the details card lines up with. */
+    }
+    <div class="min-w-0 pt-6 lg:col-start-1 lg:-mb-2 lg:pt-0">
+      <CommitteeCarousel title="Organising committee" people={committee} />
+    </div>
   </section>
 </Layout>

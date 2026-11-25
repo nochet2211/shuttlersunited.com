@@ -5,34 +5,16 @@ import Badge from "../../components/ui/Badge.astro";
 import Button from "../../components/ui/Button.astro";
 import Alert from "../../components/ui/Alert.astro";
 import { actions } from "astro:actions";
-import {
-  duesStatusFor,
-  listBookingsFor,
-  listTournaments,
-} from "../../lib/queries";
-import {
-  money,
-  periodLabel,
-  shortDate,
-  minuteToTime,
-  dateKey,
-} from "../../lib/format";
+import { duesStatusFor, listTournaments } from "../../lib/queries";
+import { money, periodLabel, shortDate } from "../../lib/format";
 
 // Middleware guarantees a member on /dashboard; this narrows the type.
 const member = Astro.locals.member!;
 
-const [dues, bookings, upcoming] = await Promise.all([
+const [dues, upcoming] = await Promise.all([
   duesStatusFor(member.id),
-  listBookingsFor(member.id),
   listTournaments("upcoming"),
 ]);
-
-const today = dateKey();
-const nextBookings = bookings
-  .filter((b) => b.status === "confirmed" && b.date.slice(0, 10) >= today)
-  .sort(
-    (a, b) => a.date.localeCompare(b.date) || a.start_minute - b.start_minute,
-  );
 
 const isWelcome = Astro.url.searchParams.get("welcome") === "1";
 const firstName = member.name.split(" ")[0];
@@ -52,7 +34,7 @@ const firstName = member.name.split(" ")[0];
       isWelcome && (
         <Alert tone="success">
           Your profile is on the roster.{" "}
-          <a href={`/players/${member.slug}`} class="underline">
+          <a href={`/members/${member.slug}`} class="underline">
             View it
           </a>
           .
@@ -95,66 +77,9 @@ const firstName = member.name.split(" ")[0];
       </div>
     </Card>
 
-    {/* --------------------------------------------------------- bookings */}
-    <Card padding="none">
-      <div
-        class="flex items-center justify-between border-b border-hairline-soft px-5 py-4"
-      >
-        <h2 class="text-[12px] uppercase leading-4 text-mute tracking-[0.06em]">
-          Upcoming court time
-        </h2>
-        <a
-          href="/book"
-          class="text-[12px] font-medium leading-4 text-link hover:text-link-deep"
-        >
-          Book a court →
-        </a>
-      </div>
-
-      {
-        nextBookings.length === 0 ? (
-          <p class="px-5 py-8 text-center text-[14px] leading-5 text-mute">
-            Nothing booked. Courts open two weeks ahead.
-          </p>
-        ) : (
-          <ul class="divide-y divide-hairline-soft">
-            {nextBookings.slice(0, 4).map((booking) => (
-              <li class="flex items-center justify-between gap-4 px-5 py-3">
-                <div class="flex flex-col">
-                  <span class="text-[14px] font-medium leading-5 text-ink">
-                    {booking.expand?.court?.name ?? "Court"}
-                    <span class="font-normal text-mute">
-                      {booking.expand?.court?.venue
-                        ? ` · ${booking.expand.court.venue}`
-                        : ""}
-                    </span>
-                  </span>
-                  <span class="text-[12px] leading-4 text-mute">
-                    {shortDate(booking.date)} ·{" "}
-                    {minuteToTime(booking.start_minute)}–
-                    {minuteToTime(booking.end_minute)}
-                  </span>
-                </div>
-
-                <form method="POST" action={actions.bookings.cancel}>
-                  <input type="hidden" name="id" value={booking.id} />
-                  <button
-                    type="submit"
-                    class="rounded-md border border-hairline px-2.5 py-1 text-[12px] leading-4 text-body transition-colors hover:border-error/30 hover:text-error"
-                  >
-                    Cancel
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )
-      }
-    </Card>
-
     {/* ------------------------------------------------------ quick links */}
     <div class="grid gap-4 sm:grid-cols-2">
-      <Card href={`/players/${member.slug}`} padding="lg">
+      <Card href={`/members/${member.slug}`} padding="lg">
         <div class="flex flex-col gap-1.5">
           <h3 class="heading-md">Your public profile</h3>
           <p class="text-[14px] leading-5 text-body">

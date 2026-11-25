@@ -10,6 +10,12 @@ export default defineConfig({
   // The club app is session-driven (auth, dues, bookings), so render on demand
   // by default and opt individual marketing pages back into prerendering.
   output: 'server',
+
+  // The roster moved from /players to /members; keep old links working.
+  redirects: {
+    '/players': '/members',
+    '/players/[slug]': '/members/[slug]',
+  },
   adapter: node({ mode: 'standalone' }),
 
   vite: {

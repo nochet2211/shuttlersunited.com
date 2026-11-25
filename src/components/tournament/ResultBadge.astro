@@ -1,0 +1,41 @@
+---
+/**
+ * How a finish is shown everywhere: a podium finish by its medal, tinted in
+ * the medal's colour (Gold / Silver / Bronze, matching the Medals icons), and
+ * anything earlier as a neutral chip with its round. One component, so the
+ * profile, the tournament pages and the newsroom can't drift apart again.
+ */
+import Badge from "../ui/Badge.astro";
+import { RESULT_LABELS } from "../../lib/tournament";
+import { MEDAL_FOR } from "../../lib/members";
+import type { TournamentResult } from "../../lib/types";
+
+interface Props {
+  result: TournamentResult;
+  class?: string;
+}
+
+const { result, class: className } = Astro.props;
+
+const medal = MEDAL_FOR[result];
+
+// Label text stays ink on the tint: none of the three hues clears AA as small
+// text (DESIGN.md, Deviation 8).
+const tints = {
+  gold: "border-gold bg-gold-tint text-ink",
+  silver: "border-silver bg-silver-tint text-ink",
+  bronze: "border-bronze bg-bronze-tint text-ink",
+};
+---
+
+{
+  medal ? (
+    <Badge tone="bare" class:list={[tints[medal], className]}>
+      {RESULT_LABELS[result]}
+    </Badge>
+  ) : (
+    <Badge tone="neutral" class={className}>
+      {RESULT_LABELS[result]}
+    </Badge>
+  )
+}

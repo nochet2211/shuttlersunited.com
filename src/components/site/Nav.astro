@@ -15,11 +15,9 @@ const { member, isAdmin } = Astro.props;
 const path = Astro.url.pathname;
 
 const links = [
-  { href: "/", label: "News" },
-  { href: "/players", label: "Players" },
+  { href: "/news", label: "News" },
+  { href: "/members", label: "Members" },
   { href: "/tournaments", label: "Tournaments" },
-  { href: "/book", label: "Book a court" },
-  { href: "/join", label: "Membership" },
 ];
 
 const isCurrent = (href: string) =>
@@ -41,8 +39,13 @@ const avatarUrl = member ? memberAvatar(member, "100x100") : null;
     aria-label="Main"
   >
     <div class="flex min-w-0 items-center gap-5">
+      {
+        /* The domain wordmark won't fit beside the links between md and lg.
+           Phones have the links on their own row, so it fits there, a size
+           down. */
+      }
       <Logo
-        labelClass="hidden sm:inline"
+        labelClass="text-[17px] sm:text-[19px] md:hidden lg:inline"
         class="min-h-10 pointer-coarse:min-h-11"
       />
 
@@ -82,7 +85,7 @@ const avatarUrl = member ? memberAvatar(member, "100x100") : null;
                 href="/admin"
                 variant="ghost"
                 size="sm"
-                class="hidden sm:inline-flex"
+                class="max-sm:hidden"
               >
                 Admin
               </Button>
@@ -98,19 +101,9 @@ const avatarUrl = member ? memberAvatar(member, "100x100") : null;
             </a>
           </>
         ) : (
-          <>
-            <Button
-              href="/login"
-              variant="ghost"
-              size="sm"
-              class="hidden sm:inline-flex"
-            >
-              Log in
-            </Button>
-            <Button href="/join" variant="primary" size="sm">
-              Join the club
-            </Button>
-          </>
+          <Button href="/login" variant="ghost" size="sm" class="max-sm:hidden">
+            Log in
+          </Button>
         )
       }
 

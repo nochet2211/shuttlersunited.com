@@ -16,7 +16,9 @@
     "pb:setup": "node scripts/setup-pocketbase.mjs",
     "pb:seed": "node scripts/setup-pocketbase.mjs --seed",
     "pb:seed:pilot": "node scripts/seed-pilot-member.mjs",
-    "pb:seed:draw": "node scripts/seed-draw-demo.mjs"
+    "pb:seed:draw": "node scripts/seed-draw-demo.mjs",
+    "pb:seed:roster": "node scripts/seed-roster.mjs",
+    "pb:seed:results": "node scripts/seed-results.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.4",

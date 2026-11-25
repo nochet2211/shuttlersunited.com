@@ -93,15 +93,4 @@ export const admin = {
       return { ok: true };
     },
   }),
-
-  cancelBooking: defineAction({
-    accept: 'form',
-    input: z.object({ id: z.string().min(1) }),
-    handler: async ({ id }, context) => {
-      requireAdmin(context.locals);
-      const pb = await getAdminClient();
-      await pb.collection('bookings').update(id, { status: 'cancelled' });
-      return { ok: true };
-    },
-  }),
 };

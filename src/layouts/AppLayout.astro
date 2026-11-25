@@ -17,7 +17,6 @@ const path = Astro.url.pathname;
 const memberNav = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/payments", label: "Dues & payments" },
-  { href: "/dashboard/bookings", label: "My bookings" },
   { href: "/dashboard/profile", label: "Profile & gear" },
 ];
 
@@ -26,7 +25,6 @@ const adminNav = [
   { href: "/admin/news", label: "News" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/payments", label: "Payments" },
-  { href: "/admin/bookings", label: "Bookings" },
 ];
 
 const nav = section === "admin" ? adminNav : memberNav;

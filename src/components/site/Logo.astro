@@ -1,8 +1,9 @@
 ---
 /**
- * The wordmark: a shuttlecock drawn at the same line weight as the rest of the
- * system, so it reads as part of the page rather than a pasted-on badge. It
- * takes its colour from the ink token, so it inverts with the theme.
+ * The club crest beside the wordmark. The crest is the official round badge,
+ * cropped to a transparent PNG in /public; it keeps its own colours in both
+ * themes. The wordmark is the club's domain in a geometric face, in the crest
+ * blue, switching to the ink in the dark theme.
  */
 interface Props {
   class?: string;
@@ -18,35 +19,24 @@ const { class: className, compact = false, labelClass } = Astro.props;
   class:list={["group inline-flex items-center gap-2 text-ink", className]}
   aria-label="Shuttlers United — home"
 >
-  <svg
-    width="22"
-    height="22"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-    class="shrink-0"
-  >
-    <!-- Cork -->
-    <circle cx="12" cy="18.75" r="3.1" fill="currentColor" stroke="none"
-    ></circle>
-    <!-- Feather skirt -->
-    <path d="M9.4 17 4.6 6.2"></path>
-    <path d="M12 15.65V3.2"></path>
-    <path d="M14.6 17 19.4 6.2"></path>
-    <path d="M10.6 16.2 7.2 4.6"></path>
-    <path d="M13.4 16.2 16.8 4.6"></path>
-    <!-- Skirt rim -->
-    <path d="M5.6 8.4c3.9 2 8.9 2 12.8 0" opacity="0.45"></path>
-  </svg>
+  <img
+    src="/logo.png"
+    alt=""
+    width="36"
+    height="36"
+    class="size-9 shrink-0 rounded-full"
+    decoding="async"
+  />
 
   {
     !compact && (
-      <span class:list={["text-[16px] font-medium", labelClass]}>
-        Shuttlers United
+      <span
+        class:list={[
+          "font-crest font-semibold leading-none tracking-[-0.02em] text-crest",
+          labelClass ?? "text-[19px]",
+        ]}
+      >
+        shuttlersunited<span class="text-mute">.com</span>
       </span>
     )
   }

@@ -1,0 +1,142 @@
+---
+/**
+ * A member's medals, gold first. Hovering a medal shows where it was won
+ * ("Silver · 2nd Ao Open Badminton Tournament 2026 · 85+ doubles").
+ *
+ * `grouped` collapses them to one medal per colour with a count, its tooltip
+ * listing every win of that colour in the same "Gold · …" form; the roster
+ * card uses it so a decorated player doesn't crowd the name. The profile
+ * shows each medal on its own.
+ *
+ * The disc takes the placing colour (gold / silver / bronze, DESIGN.md
+ * Deviation 8) under a white sheen so it reads as metal rather than a flat
+ * dot; the ribbon is the crest blue, the club's own colour.
+ *
+ * The tooltip is CSS-only and the medals are not focusable: on a member card
+ * they sit inside the card's link, which can't hold another focus stop. The
+ * same text is the group's aria-label, so a screen reader hears every medal.
+ * Renders nothing when there are no wins.
+ */
+import { MEDAL_ORDER, type MedalWin } from "../../lib/members";
+
+interface Props {
+  wins: MedalWin[];
+  grouped?: boolean;
+  size?: "sm" | "md";
+  /**
+   * Which edge the tooltip lines up with. `end` for medals near the right of
+   * their container (the roster card), so the text can't run off the page.
+   */
+  align?: "start" | "end";
+  /** Where the tooltip opens; `bottom` where text above would be covered. */
+  side?: "top" | "bottom";
+  class?: string;
+}
+
+const {
+  wins,
+  grouped = false,
+  size = "sm",
+  align = "start",
+  side = "top",
+  class: className,
+} = Astro.props;
+
+const discs = {
+  gold: "text-gold",
+  silver: "text-silver",
+  bronze: "text-bronze",
+};
+const names = { gold: "Gold", silver: "Silver", bronze: "Bronze" };
+
+const describe = (win: MedalWin) => `${names[win.medal]} · ${win.label}`;
+
+// A grouped tooltip lists each place once, with a count when it repeats
+// ("Gold · U-19 Doubles State Champion ×2").
+const tallyLines = (group: MedalWin[]) => {
+  const counts = new Map<string, number>();
+  for (const win of group)
+    counts.set(win.label, (counts.get(win.label) ?? 0) + 1);
+  return [...counts].map(([label, n]) => (n > 1 ? `${label} ×${n}` : label));
+};
+
+// One item per medal shown: a single win, or every win of one colour.
+const items = grouped
+  ? MEDAL_ORDER.map((medal) => ({
+      medal,
+      count: wins.filter((win) => win.medal === medal).length,
+      lines: tallyLines(wins.filter((win) => win.medal === medal)),
+    })).filter((item) => item.count > 0)
+  : wins.map((win) => ({
+      medal: win.medal,
+      count: 1,
+      lines: [win.label],
+    }));
+---
+
+{
+  items.length > 0 && (
+    <span
+      class:list={["inline-flex flex-wrap items-center gap-1", className]}
+      role="img"
+      aria-label={wins.map(describe).join("; ")}
+    >
+      {items.map((item) => (
+        <span
+          class="group/medal relative inline-flex items-center gap-0.5"
+          aria-hidden="true"
+        >
+          <svg
+            viewBox="0 0 24 34"
+            class:list={[
+              discs[item.medal],
+              "shrink-0",
+              size === "sm" ? "h-7 w-5" : "h-9 w-[26px]",
+            ]}
+          >
+            <defs>
+              <radialGradient id="medal-sheen" cx="0.35" cy="0.3" r="0.75">
+                <stop offset="0" stop-color="white" stop-opacity="0.7" />
+                <stop offset="0.45" stop-color="white" stop-opacity="0.15" />
+                <stop offset="1" stop-color="black" stop-opacity="0.15" />
+              </radialGradient>
+            </defs>
+            <path d="M4 0h6l4 13H8zM20 0h-6l-4 13h6z" class="fill-pro" />
+            <circle cx="12" cy="23" r="10" fill="currentColor" />
+            <circle cx="12" cy="23" r="10" fill="url(#medal-sheen)" />
+            <circle
+              cx="12"
+              cy="23"
+              r="7"
+              fill="none"
+              stroke="white"
+              stroke-opacity="0.5"
+              stroke-width="1"
+            />
+          </svg>
+          {grouped && item.count > 1 && (
+            <span class="text-[12px] font-medium leading-4 text-body tabular-nums">
+              {item.count}
+            </span>
+          )}
+          {/* `invisible` as well as transparent, so the hidden tooltip can't
+              widen the page or catch the pointer. */}
+          <span
+            class:list={[
+              "pointer-events-none invisible absolute z-20 w-max max-w-72 rounded-md bg-ink px-2.5 py-1.5 text-[12px] leading-4 text-on-ink opacity-0 shadow-panel transition-opacity duration-150 group-hover/medal:visible group-hover/medal:opacity-100",
+              align === "end" ? "right-0" : "left-0",
+              side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
+            ]}
+          >
+            {/* Every line reads the way a single win does, "Gold · …". */}
+            <span class="flex flex-col gap-0.5 font-medium">
+              {item.lines.map((line) => (
+                <span>{`${names[item.medal]} · ${line}`}</span>
+              ))}
+            </span>
+          </span>
+        </span>
+      ))}
+    </span>
+  )
+}

@@ -4,6 +4,9 @@
  * so the OS preference only seeds a first visit — once someone picks, the
  * choice sticks in localStorage and the toggle wins in both directions.
  *
+ * The nav renders this twice (desktop bar and mobile drawer), so the script
+ * binds every instance rather than looking one up by id.
+ *
  * Both icons render; CSS shows exactly one, so the button is correct on the
  * very first paint without waiting for JS to decide.
  */
@@ -15,7 +18,7 @@ const { class: className } = Astro.props;
 
 <button
   type="button"
-  id="theme-toggle"
+  data-theme-toggle
   class:list={[
     "grid size-10 shrink-0 place-items-center rounded-md border border-hairline bg-elevated text-ink transition-colors hover:bg-soft",
     className,
@@ -68,19 +71,23 @@ const { class: className } = Astro.props;
 </style>
 
 <script>
-  const button = document.getElementById("theme-toggle");
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
+    "[data-theme-toggle]",
+  );
   const root = document.documentElement;
 
   const sync = () => {
     const dark = root.classList.contains("dark");
-    button?.setAttribute("aria-pressed", String(dark));
-    button?.setAttribute(
-      "aria-label",
-      dark ? "Switch to light theme" : "Switch to dark theme",
-    );
+    for (const button of buttons) {
+      button.setAttribute("aria-pressed", String(dark));
+      button.setAttribute(
+        "aria-label",
+        dark ? "Switch to light theme" : "Switch to dark theme",
+      );
+    }
   };
 
-  button?.addEventListener("click", () => {
+  const toggle = () => {
     const dark = root.classList.toggle("dark");
     try {
       localStorage.setItem("su-theme", dark ? "dark" : "light");
@@ -88,7 +95,8 @@ const { class: className } = Astro.props;
       // Private browsing — the toggle still works for this page view.
     }
     sync();
-  });
+  };
 
+  for (const button of buttons) button.addEventListener("click", toggle);
   sync();
 </script>

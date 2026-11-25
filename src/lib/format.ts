@@ -36,21 +36,6 @@ export function periodKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-/** 570 -> "9:30 AM" */
-export function minuteToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-}
-
-/** "09:30" -> 570 */
-export function timeToMinute(time: string): number {
-  const [h, m] = time.split(':').map(Number);
-  return h * 60 + m;
-}
-
 export function age(dateOfBirth: string): number {
   const dob = new Date(dateOfBirth);
   const now = new Date();
@@ -85,15 +70,5 @@ export function dateKey(date = new Date()): string {
   ).padStart(2, '0')}`;
 }
 
-/**
- * Half-open bounds for a single day, for PocketBase date filters.
- *
- * PocketBase stores dates with millisecond precision and a trailing Z
- * ("2026-08-31 00:00:00.000Z"), so `date = "2026-08-31 00:00:00"` never
- * matches. Always compare against a range instead of testing equality.
- */
-export function dayBounds(date: string): { start: string; end: string } {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + 1);
-  return { start: `${date} 00:00:00`, end: `${dateKey(next)} 00:00:00` };
-}
+/** "state" → "State": stored select values are lowercase, labels are not. */
+export const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);

@@ -600,6 +600,29 @@ Chromatic surfaces that go with it: `card-feature` (the pinned lead story, a
 category-tinted panel with a 3px hue spine on its left edge), `accent-rule`, and
 `stat-tile`.
 
+## Deviation 8 — member annotations
+
+Two kinds of member get marked on the roster and on their profile, each with a
+ring around the avatar and a matching label:
+
+| Who | Ring and label | Tokens |
+|---|---|---|
+| Office bearer (President, Secretary…) | gold | `gold` / `gold-tint` |
+| Competitive player (district, state, national…) | crest blue | `pro` / `pro-tint` |
+
+`gold` here reads as "club office", not as a result, and only ever appears as
+this ring and label.
+
+Medals are the other place the placings appear on public pages, and they mean
+exactly what the tokens were made for: `Medals` draws a disc in `gold`,
+`silver` or `bronze` for a win, a runner-up finish and a semi-final (bronze, as
+badminton awards both losing semi-finalists). They come from the member's
+tournament entries, never set by hand, so a result recorded is a medal shown.
+`pro` is the crest's blue, so representing the club reads as the club's own
+colour; in the dark theme it lifts to a lighter blue so the ring clears the
+navy canvas. When a member is both, the office ring wins and both labels show.
+Label text is `text-ink` on the tint: neither hue clears AA as small text.
+
 ## Rules that are easy to get wrong
 
 - **Pills on primary CTAs, rounded-md on cards.** The pill radius is for buttons,

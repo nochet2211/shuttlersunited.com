@@ -1,0 +1,110 @@
+---
+/**
+ * A swipeable row of organising-committee cards. Scroll-snap does the work, so
+ * it swipes on touch and scrolls with a trackpad with no script at all; the
+ * arrow buttons are a desktop convenience layered on top. It never advances
+ * by itself — every card is someone's name, and an auto-rotating row moves
+ * them out from under the reader.
+ *
+ * Each card image already prints the name and role, so the same text goes in
+ * the alt rather than in a visible caption that would repeat it.
+ */
+import { Image } from "astro:assets";
+
+interface Props {
+  title: string;
+  people: { name: string; role: string; image: ImageMetadata }[];
+}
+
+const { title, people } = Astro.props;
+const headingId = "committee-heading";
+---
+
+<section aria-labelledby={headingId} class="flex flex-col gap-5" data-carousel>
+  <div class="flex items-end justify-between gap-4">
+    <h2 id={headingId} class="heading-md text-ink">{title}</h2>
+
+    <div class="hidden gap-2 md:flex">
+      {
+        [
+          { dir: "-1", label: "Previous", path: "M10 3 5 8l5 5" },
+          { dir: "1", label: "Next", path: "M6 3l5 5-5 5" },
+        ].map((button) => (
+          <button
+            type="button"
+            data-step={button.dir}
+            class="grid size-10 place-items-center rounded-full border border-hairline bg-elevated text-ink transition-colors hover:bg-soft disabled:cursor-default disabled:text-disabled disabled:hover:bg-elevated"
+          >
+            <span class="sr-only">{button.label}</span>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d={button.path} />
+            </svg>
+          </button>
+        ))
+      }
+    </div>
+  </div>
+
+  {/* Focusable so a keyboard user can arrow through it once inside. */}
+  <ul
+    data-track
+    tabindex="0"
+    aria-label={`${title}, ${people.length} cards`}
+    class="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:thin]"
+  >
+    {
+      people.map((person) => (
+        <li class="w-[62%] shrink-0 snap-start sm:w-[38%] md:w-[28%] lg:w-[30%]">
+          <Image
+            src={person.image}
+            widths={[260, 520]}
+            sizes="(min-width: 1024px) 240px, (min-width: 768px) 28vw, (min-width: 640px) 38vw, 62vw"
+            alt={`${person.name}, ${person.role}`}
+            class="card block h-auto w-full"
+            loading="lazy"
+          />
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-carousel]").forEach((root) => {
+    const track = root.querySelector<HTMLElement>("[data-track]");
+    const buttons = root.querySelectorAll<HTMLButtonElement>("[data-step]");
+    if (!track) return;
+
+    // Step by most of a viewport, so the last card of one view stays in sight
+    // as the first of the next.
+    buttons.forEach((button) =>
+      button.addEventListener("click", () => {
+        const step = Number(button.dataset.step);
+        track.scrollBy({ left: step * track.clientWidth * 0.9 });
+      }),
+    );
+
+    const sync = () => {
+      const end = track.scrollWidth - track.clientWidth - 1;
+      buttons.forEach((button) => {
+        button.disabled =
+          button.dataset.step === "-1"
+            ? track.scrollLeft <= 0
+            : track.scrollLeft >= end;
+      });
+    };
+    track.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync);
+    sync();
+  });
+</script>

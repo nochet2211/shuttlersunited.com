@@ -34,9 +34,13 @@ const classes = [
   "block bg-elevated border border-hairline-soft",
   panel ? "rounded-xl" : "rounded-lg",
   paddings[padding],
-  elevated && "shadow-panel",
-  // Hover lifts to surface-2 + the stronger hairline — elevation level 2.
-  href && "transition-colors duration-150 hover:bg-soft hover:border-hairline",
+  // Cards carry the subtle card shadow (DESIGN.md); the sticky rail, more.
+  elevated ? "shadow-panel" : "shadow-card",
+  // Hover lifts to the panel shadow + the stronger hairline — elevation level
+  // 2. A shadow, not a fill change, so a card on a tinted band (bg-soft) doesn't
+  // melt into its background on hover.
+  href &&
+    "transition-[box-shadow,border-color] duration-150 hover:border-hairline hover:shadow-panel",
   className,
 ]
   .filter(Boolean)

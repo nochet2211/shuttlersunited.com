@@ -86,6 +86,44 @@ export const postCover = (post: Post, thumb = '1200x630'): string | null =>
   fileUrl('posts', post.id, post.cover, thumb);
 
 /**
+ * A post's attachments, each with a readable name. PocketBase stores
+ * "registration_form_x7k2m9q1ab.pdf"; readers see "Registration form". Images
+ * are shown on the page as photos; anything else is offered as a download.
+ */
+export interface PostAttachment {
+  /** The file itself, for an <img> or a link to the full size. */
+  url: string;
+  /** The same file sent as a download. */
+  downloadUrl: string;
+  name: string;
+  /** "PDF", "JPEG"… */
+  type: string;
+  isImage: boolean;
+}
+
+export function postAttachments(post: Post): PostAttachment[] {
+  return (post.attachments ?? []).flatMap((filename) => {
+    const url = fileUrl('posts', post.id, filename);
+    if (!url) return [];
+    const match = filename.match(/^(.*?)(?:_[a-z0-9]{10})?\.([a-z0-9]+)$/i);
+    const base = (match?.[1] ?? filename).replace(/[_-]+/g, ' ').trim();
+    const ext = (match?.[2] ?? '').toUpperCase();
+    const type = ext === 'JPG' ? 'JPEG' : ext;
+    return [
+      {
+        url,
+        // ?download=1 makes PocketBase send it as an attachment: the files
+        // live on another origin, where the <a download> attribute is ignored.
+        downloadUrl: `${url}?download=1`,
+        name: base.charAt(0).toUpperCase() + base.slice(1),
+        type,
+        isImage: ['JPEG', 'PNG', 'WEBP'].includes(type),
+      },
+    ];
+  });
+}
+
+/**
  * A block from a post body. Bodies are plain text — no markdown dependency and
  * no raw HTML, so nothing an editor types can inject markup into the page.
  *
@@ -165,7 +203,11 @@ export function fixtureTiming(start: string, end?: string, now = new Date()): st
   const endsAt = end ? new Date(end) : startsAt;
 
   if (now >= startsAt && now <= endsAt) return 'On now';
-  if (now > endsAt) return timeAgo(endsAt, now);
+  // Past a week timeAgo falls back to a date, which would only repeat the date
+  // range printed beside this line.
+  if (now > endsAt) {
+    return now.getTime() - endsAt.getTime() < 604_800_000 ? timeAgo(endsAt, now) : 'Finished';
+  }
 
   const days = Math.ceil((startsAt.getTime() - now.getTime()) / 86_400_000);
   if (days <= 0) return 'Today';

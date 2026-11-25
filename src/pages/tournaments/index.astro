@@ -1,11 +1,12 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import Badge from "../../components/ui/Badge.astro";
+import ResultBadge from "../../components/tournament/ResultBadge.astro";
 import Eyebrow from "../../components/ui/Eyebrow.astro";
 import Empty from "../../components/ui/Empty.astro";
 import { listTournaments, tournamentSummaries } from "../../lib/queries";
-import { money, shortDate } from "../../lib/format";
-import type { Tournament, TournamentResult } from "../../lib/types";
+import { capitalize, money, shortDate } from "../../lib/format";
+import type { Tournament } from "../../lib/types";
 
 const [all, summaries] = await Promise.all([
   listTournaments(),
@@ -26,19 +27,6 @@ const dateRange = (event: Tournament) =>
   event.end_date.slice(0, 10) !== event.start_date.slice(0, 10)
     ? `${shortDate(event.start_date)} – ${shortDate(event.end_date)}`
     : shortDate(event.start_date);
-
-const RESULT_LABELS: Record<TournamentResult, string> = {
-  winner: "Winner",
-  "runner-up": "Runner-up",
-  "semi-final": "Semi-finalist",
-  "quarter-final": "Quarter-finalist",
-  "round-of-16": "Round of 16",
-  "group-stage": "Group stage",
-  participated: "Participated",
-};
-
-const resultTone = (result: TournamentResult) =>
-  result === "winner" ? "ink" : result === "runner-up" ? "accent" : "neutral";
 
 // A tier column only earns its place once the calendar actually varies.
 const levelTone = (level: Tournament["level"]) =>
@@ -142,7 +130,7 @@ const panels = [
                       <tr class="border-b border-hairline-soft last:border-0 hover:bg-soft/50">
                         <td class="px-4 py-3">
                           <Badge tone={levelTone(event.level)}>
-                            {event.level}
+                            {capitalize(event.level)}
                           </Badge>
                         </td>
                         <td class="px-3 py-3">
@@ -182,9 +170,7 @@ const panels = [
                         <td class="px-4 py-3 text-right">
                           {panel.id === "past" ? (
                             summary?.best ? (
-                              <Badge tone={resultTone(summary.best)}>
-                                {RESULT_LABELS[summary.best]}
-                              </Badge>
+                              <ResultBadge result={summary.best} />
                             ) : (
                               <span class="text-[14px] leading-5 text-faint">
                                 —

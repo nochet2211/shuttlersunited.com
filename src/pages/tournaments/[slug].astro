@@ -14,7 +14,7 @@ import {
   listEntriesForTournament,
   listMatchesForTournament,
 } from "../../lib/queries";
-import { shortDate } from "../../lib/format";
+import { capitalize, shortDate } from "../../lib/format";
 import {
   EVENT_NAMES,
   EVENT_ORDER,
@@ -133,11 +133,15 @@ const stats = [
   { label: "Titles", value: `${titles}` },
 ].filter(Boolean) as { label: string; value: string }[];
 
+// Before a ball is hit the bracket is a draw, not results.
+const resultsLabel =
+  isPast || tournament.status === "ongoing" ? "Results" : "Draw";
+
 // --- page nav ----------------------------------------------------------------
 // Results lead when there are any — the draw sheet is what people open the
 // page for, so it gets the first tab and the first screen.
 const sections = [
-  hasResults ? { id: "results", label: "Results" } : null,
+  hasResults ? { id: "results", label: resultsLabel } : null,
   { id: "overview", label: "Overview" },
   formatStages.length ? { id: "format", label: "Format" } : null,
   prizeSlots.length ? { id: "prize-pool", label: "Prize pool" } : null,
@@ -182,7 +186,7 @@ const subtitle = [dateRange, tournament.venue, tournament.city]
     >
       <div class="flex flex-wrap items-center gap-2">
         <Badge tone={tournament.level === "national" ? "ink" : "neutral"}
-          >{tournament.level}</Badge
+          >{capitalize(tournament.level)}</Badge
         >
         {
           tournament.status === "ongoing" && (
@@ -246,7 +250,7 @@ const subtitle = [dateRange, tournament.venue, tournament.city]
       hasResults && (
         <section id="results" class="mb-12 scroll-mt-20">
           <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <h2 class="heading-md">Results</h2>
+            <h2 class="heading-md">{resultsLabel}</h2>
 
             {/* One tab per event — five stacked draw sheets is more page than
  anyone reads, and the event is how people look results up. */}

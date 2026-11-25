@@ -14,6 +14,7 @@ import { getPostBySlug, listPosts } from "../../lib/queries";
 import {
   categoryLabel,
   postCover,
+  postAttachments,
   renderPostBody,
   readingMinutes,
 } from "../../lib/news";
@@ -32,6 +33,10 @@ const [more] = await Promise.all([listPosts({ limit: 3, exclude: post.id })]);
 
 const cover = postCover(post, "1600x800");
 const blocks = renderPostBody(post.body);
+// Image attachments are shown as photos; anything else is a download.
+const attachments = postAttachments(post);
+const photos = attachments.filter((file) => file.isImage);
+const downloads = attachments.filter((file) => !file.isImage);
 const author = post.expand?.author;
 const fixture = post.expand?.tournament;
 ---
@@ -41,7 +46,7 @@ const fixture = post.expand?.tournament;
     {/* --------------------------------------------------------- headline */}
     <header class="flex max-w-3xl flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        <a href={`/?category=${post.category}`}>
+        <a href={`/news?category=${post.category}`}>
           <Badge>{categoryLabel(post.category)}</Badge>
         </a>
         <time
@@ -70,7 +75,7 @@ const fixture = post.expand?.tournament;
             <span class="text-[14px] leading-5 text-mute">
               By{" "}
               <a
-                href={`/players/${author.slug}`}
+                href={`/members/${author.slug}`}
                 class="font-medium text-ink hover:underline"
               >
                 {author.name}
@@ -111,6 +116,61 @@ const fixture = post.expand?.tournament;
             ) : (
               <p class="text-[16px] leading-[1.6] text-body">{block.text}</p>
             ),
+          )
+        }
+
+        {
+          photos.length > 0 && (
+            <div class="mt-2 grid gap-3 sm:grid-cols-2">
+              {photos.map((photo) => (
+                <figure class="flex flex-col gap-1.5">
+                  {/* Fitted, not cropped, so a portrait poster shows whole on
+                      the soft letterbox; the link opens it full size. */}
+                  <a
+                    href={photo.url}
+                    target="_blank"
+                    rel="noopener"
+                    class="block overflow-hidden rounded-lg border border-hairline-soft bg-soft"
+                  >
+                    <img
+                      src={photo.url}
+                      alt={photo.name}
+                      loading="lazy"
+                      decoding="async"
+                      class="aspect-[4/3] w-full object-contain transition-transform duration-300 hover:scale-[1.02]"
+                    />
+                  </a>
+                  <figcaption class="text-[13px] leading-5 text-mute">
+                    {photo.name}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )
+        }
+
+        {
+          downloads.length > 0 && (
+            <Card padding="md" class="mt-2">
+              <div class="flex flex-col gap-2">
+                <p class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                  Downloads
+                </p>
+                <ul class="flex flex-col gap-1.5">
+                  {downloads.map((file) => (
+                    <li>
+                      <a
+                        href={file.downloadUrl}
+                        download
+                        class="text-[16px] font-medium leading-[1.5] text-link hover:text-link-deep"
+                      >
+                        {file.name} ({file.type}) ↓
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
           )
         }
 
@@ -201,7 +261,7 @@ const fixture = post.expand?.tournament;
           )
         }
 
-        <Button href="/" variant="ghost" size="sm" class="self-start">
+        <Button href="/news" variant="ghost" size="sm" class="self-start">
           ← All news
         </Button>
       </aside>

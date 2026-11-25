@@ -1,9 +1,15 @@
 ---
 /**
  * The playoff draw, one column per round. Columns scroll horizontally rather
- * than wrapping — a bracket that reflows stops being a bracket — and each
- * column's matches are spread evenly so a match sits roughly opposite the two
- * it was fed by.
+ * than wrapping — a bracket that reflows stops being a bracket.
+ *
+ * Every column splits the same height into equal rows, one per match, with the
+ * match centred in its row. That puts each match exactly level with the
+ * midpoint of the two matches that feed it, so the connector lines can be
+ * plain pseudo-elements: an elbow out of each fed pair, half the column gap
+ * wide, and a stub into the match it leads to. Lines are only drawn where one
+ * round halves into the next; a third-place column breaks that, so it is left
+ * unjoined rather than joined wrongly.
  */
 import BracketMatch from "./BracketMatch.astro";
 import type { BracketColumn } from "../../lib/tournament";
@@ -13,21 +19,46 @@ interface Props {
 }
 
 const { columns } = Astro.props;
+
+const halves = (from?: BracketColumn, to?: BracketColumn) =>
+  Boolean(from && to) &&
+  from!.round !== "3P" &&
+  to!.round !== "3P" &&
+  from!.matches.length === to!.matches.length * 2;
 ---
 
 <div class="overflow-x-auto pb-2">
-  <div class="flex w-full min-w-max gap-4">
+  {/* gap-8 is twice the connector width (w-4), so the two halves meet. */}
+  <div class="flex w-full min-w-max gap-8">
     {
-      columns.map((column) => (
-        <div class="flex w-[260px] max-w-[320px] shrink-0 grow flex-col">
-          <h4 class="mb-3 eyebrow">{column.label}</h4>
-          <div class="flex flex-1 flex-col justify-around gap-3">
-            {column.matches.map((match) => (
-              <BracketMatch match={match} />
-            ))}
+      columns.map((column, index) => {
+        const feeds = halves(column, columns[index + 1]);
+        const fed = halves(columns[index - 1], column);
+        return (
+          <div class="flex w-[260px] max-w-[320px] shrink-0 grow flex-col">
+            <h4 class="mb-3 eyebrow">{column.label}</h4>
+            <div class="flex flex-1 flex-col">
+              {column.matches.map((_, slot) => (
+                <div
+                  class:list={[
+                    "relative flex flex-1 basis-0 flex-col justify-center py-1.5",
+                    feeds &&
+                      "after:absolute after:-right-4 after:w-4 after:border-r after:border-hairline",
+                    feeds &&
+                      (slot % 2 === 0
+                        ? "after:top-1/2 after:bottom-0 after:rounded-tr-md after:border-t"
+                        : "after:top-0 after:bottom-1/2 after:rounded-br-md after:border-b"),
+                    fed &&
+                      "before:absolute before:-left-4 before:top-1/2 before:w-4 before:border-t before:border-hairline",
+                  ]}
+                >
+                  <BracketMatch match={column.matches[slot]} />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))
+        );
+      })
     }
   </div>
 </div>

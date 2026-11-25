@@ -142,7 +142,7 @@ const selectClass =
             type="number"
             min={0}
             max={999}
-            value={member.jersey_number ?? ""}
+            value={member.jersey_number || ""}
           />
           <Field
             label="Emergency contact"

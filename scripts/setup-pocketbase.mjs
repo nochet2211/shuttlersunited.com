@@ -58,6 +58,11 @@ async function upsert(definition) {
   }
 }
 
+// Tournament events: the five standard disciplines, veterans' men's doubles
+// (40+, 45+, 60+), then the combined-age doubles categories played at the district
+// interclub. Mirrors EVENT_ORDER in src/lib/tournament.ts.
+const EVENTS = ['MS', 'WS', 'MD', 'WD', 'XD', 'MD40', 'MD45', 'MD60', '75+', '85+', '95+', '105+'];
+
 const text = (name, options = {}) => ({ name, type: 'text', ...options });
 const select = (name, values, options = {}) => ({
   name,
@@ -126,6 +131,18 @@ async function provision() {
       date('joined_on'),
       text('city', { max: 60 }),
       text('emergency_contact', { max: 16 }),
+      // Office bearers only, most senior first — the members list sorts by this
+      // order (OFFICES in src/lib/members.ts) before it sorts by name.
+      select('office', ['President', 'Vice President', 'General Secretary', 'Secretary',
+        'Joint Secretary', 'Treasurer', 'Finance Secretary', 'Finance Convenor', 'Finance Member',
+        'Executive Member']),
+      // Players who compete for the club, at their highest level; drives the
+      // "State player" annotation on the roster.
+      select('competes_at', ['district', 'state', 'national', 'international']),
+      // Career honours with no dated tournament behind them:
+      // [{ title, medal?: 'gold' | 'silver' | 'bronze', count? }]. Medals here
+      // count alongside the ones earned from tournament entries.
+      { name: 'honours', type: 'json', maxSize: 5000 },
       bool('is_public'),
       ...timestamps(),
     ],
@@ -246,6 +263,9 @@ async function provision() {
       text('body', { max: 20000 }),
       { name: 'cover', type: 'file', maxSelect: 1, maxSize: 5_242_880,
         mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
+      // Downloads for readers — an event pamphlet, an entry form.
+      { name: 'attachments', type: 'file', maxSelect: 4, maxSize: 10_485_760,
+        mimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
       text('source_name', { max: 120 }),
       { name: 'source_url', type: 'url' },
       // Optional: ties a story to the fixture it is about, so the article can
@@ -276,7 +296,7 @@ async function provision() {
     fields: [
       relation('tournament', tournaments.id, { required: true, cascadeDelete: true }),
       relation('member', members.id, { required: true, cascadeDelete: true }),
-      select('event', ['MS', 'WS', 'MD', 'WD', 'XD'], { required: true }),
+      select('event', EVENTS, { required: true }),
       relation('partner', members.id),
       text('partner_name', { max: 80 }),
       select('result', ['winner', 'runner-up', 'semi-final', 'quarter-final',
@@ -309,7 +329,7 @@ async function provision() {
     type: 'base',
     fields: [
       relation('tournament', tournaments.id, { required: true, cascadeDelete: true }),
-      select('event', ['MS', 'WS', 'MD', 'WD', 'XD'], { required: true }),
+      select('event', EVENTS, { required: true }),
       select('stage', ['group', 'playoff'], { required: true }),
       // Codes rather than labels so rounds sort into bracket columns.
       select('round', ['R64', 'R32', 'R16', 'QF', 'SF', 'F', '3P', 'RR'], { required: true }),
@@ -498,54 +518,60 @@ async function seed({ plans, courts }) {
   }
 
   const tournamentRows = [
-    { name: 'Shuttlers United Club Championship 2026', slug: 'club-championship-2026',
-      description: 'Our flagship internal championship across all five events.',
-      venue: 'Shuttlers Arena', city: 'Dimapur', start_date: '2026-09-19 09:00:00',
-      end_date: '2026-09-21 20:00:00', level: 'club', status: 'upcoming',
-      registration_deadline: '2026-09-10 23:59:00', entry_fee: 50_000,
-      organizer: 'Shuttlers United', draw_size: 32, prize_pool: 600_000,
+    { name: '9th Dimapur District Interclub Badminton Tournament 2026',
+      slug: 'dimapur-interclub-2026',
+      description: 'Clubs from across Dimapur meet for two days of interclub badminton, hosted by Shuttlers United in memory of Late Shri. Mayang Lima. Event partners: State Bank of India and Anil Steel.',
+      venue: 'Livingstone Foundation College Indoor Stadium, Landmark Colony', city: 'Dimapur',
+      start_date: '2026-11-27 03:30:00', end_date: '2026-11-28 14:30:00',
+      level: 'district', status: 'upcoming',
+      organizer: 'Shuttlers United, under the aegis of the Dimapur District Badminton Association',
+      draw_size: 16, prize_pool: 7_200_000,
       format: [
-        'Five events — MS, WS, MD, WD and XD.',
-        'Group stage — groups of 3 or 4 depending on entries.',
-        'Top 2 of each group advance to a single-elimination draw.',
-        'Best of three games to 21.',
-      ].join('\n'),
-      prize_distribution: [
-        { place: '1st', amount: 60_000, note: 'Per event' },
-        { place: '2nd', amount: 35_000, note: 'Per event' },
-        { place: '3rd', amount: 20_000, note: 'Per event, both semi-finalists' },
-      ] },
-    { name: 'Dimapur District Open', slug: 'dimapur-district-open-2026',
-      description: 'District ranking tournament — five of our members are entered.',
-      venue: 'Dimapur Indoor Stadium', city: 'Dimapur', start_date: '2026-10-10 08:00:00',
-      end_date: '2026-10-13 21:00:00', level: 'district', status: 'upcoming',
-      registration_deadline: '2026-09-28 23:59:00', entry_fee: 120_000,
-      organizer: 'Dimapur District Badminton Association', draw_size: 64,
-      format: [
-        'Qualifying rounds on day one for unseeded entries.',
-        'Main draw of 32, single elimination.',
-        'Best of three games to 21.',
+        'Four combined-age doubles categories — 75+ (min age 35), 85+ (min age 40), 95+ (min age 45) and 105+ (min age 45).',
+        'Single elimination from the round of 16.',
+        'Best of three games, first to 15 points.',
       ].join('\n') },
-    { name: 'Summer Smash Invitational', slug: 'summer-smash-2026',
-      description: 'An eight-club invitational played over a weekend: a round-robin group stage on the Saturday, knockouts on the Sunday. We entered men\'s doubles and mixed doubles.',
-      venue: 'DDSC Indoor Stadium', city: 'Dimapur', start_date: '2026-06-14 08:00:00',
-      end_date: '2026-06-15 20:00:00', level: 'open', status: 'completed', entry_fee: 90_000,
-      organizer: 'Nagaland Badminton Collective', draw_size: 16, prize_pool: 1_500_000,
-      format: [
-        'Group stage — 4 groups of 4, single round robin.',
-        'Top 2 of each group advance to the quarter-finals.',
-        'Knockouts — quarter-finals through final, single elimination.',
-        'All matches best of three games to 21, cap at 30.',
-      ].join('\n'),
+    { name: '2nd Ao Open Badminton Tournament 2026', slug: 'ao-open-2026',
+      description: 'Organised by the Dimapur Ao Youth Organisation (DAYO) under the theme "Unity through Sports": 56 teams across five categories, veteran players included. We came home with two silver medals.',
+      venue: 'Indoor Stadium, Multi Disciplinary Sports Complex', city: 'Dimapur',
+      start_date: '2026-11-20 03:30:00', end_date: '2026-11-21 14:30:00',
+      level: 'open', status: 'completed', organizer: 'Dimapur Ao Youth Organisation (DAYO)' },
+    // Only the closing day (4 September) is published, so it stands as both dates.
+    { name: '48th Inter District and State Badminton Championship 2026', slug: 'nba-state-championship-2026',
+      description: 'The state championship under the Nagaland Badminton Association, played at the Indoor Badminton Stadium in Mon, with districts from across Nagaland competing in open, age-group and veterans categories.',
+      venue: 'Indoor Badminton Stadium', city: 'Mon', start_date: '2026-09-04 03:30:00',
+      level: 'state', status: 'completed', organizer: 'Nagaland Badminton Association' },
+    { name: 'Nagaland Masters Badminton Championship 2026', slug: 'nagaland-masters-2026',
+      description: 'The state masters championship under the Nagaland Badminton Association: 104 players in 72 entries across seven categories — 35+, 40+, 45+, 50+, 55+, 60+ and mixed doubles — over two days in Dimapur.',
+      venue: 'Dimapur Badminton Club Stadium, United Colony', city: 'Dimapur',
+      start_date: '2026-10-23 03:30:00', end_date: '2026-10-24 14:30:00',
+      level: 'state', status: 'completed', organizer: 'Nagaland Badminton Association' },
+    // The pamphlet gives an earlier venue (ADC Court, Dimapur) and deadline
+    // (20 Nov); the registration form's details are the current ones.
+    { name: 'Hornbill Festival Invitational Badminton Championship 2026', slug: 'hornbill-2026',
+      description: 'The Nagaland Badminton Association\'s invitational championship, held as part of the Hornbill Festival, with INR 9,00,000 in prize money across nine events.',
+      venue: 'Regional Centre for Sporting Excellence, Sovima', city: 'Chümoukedima',
+      start_date: '2026-12-02 03:30:00', end_date: '2026-12-05 14:30:00',
+      registration_deadline: '2026-11-25 18:29:00', entry_fee: 300_000,
+      level: 'open', status: 'upcoming', organizer: 'Nagaland Badminton Association',
+      prize_pool: 90_000_000,
       prize_distribution: [
-        { place: '1st', amount: 400_000, event: 'MD' },
-        { place: '2nd', amount: 200_000, event: 'MD' },
-        { place: '3rd', amount: 100_000, event: 'MD' },
-        { place: '1st', amount: 400_000, event: 'XD' },
-        { place: '2nd', amount: 200_000, event: 'XD' },
-        { place: '3rd', amount: 100_000, event: 'XD' },
-        { place: 'Quarter-finalists', amount: 25_000, note: 'Each, both events' },
-      ] },
+        { place: 'Champion', amount: 5_000_000, note: 'Per event' },
+        { place: 'Runners-up', amount: 3_000_000, note: 'Per event' },
+        { place: 'Losing semi-finalists', amount: 1_000_000, note: 'Each, per event' },
+      ],
+      format: [
+        'Nine events: U-15 girls\' singles, U-17 boys\' doubles, men\'s and women\'s doubles (open), and combined-age men\'s doubles 75+ and 85+ (each player 35 and above), 95+ and 105+ (45 and above) and 115+ (55 and above).',
+        'A player may enter at most three events.',
+        'Best of three games, first to 15 points.',
+        'Entry INR 3,000 per pair, INR 2,000 for singles.',
+      ].join('\n') },
+    // The first Ao Open, run by DAYO for Dimapur, Chümoukedima and Niuland.
+    { name: '1st DCN Ao Open Badminton Tournament 2024', slug: 'ao-open-2024',
+      description: 'The first edition of the Ao Open, organised by the Dimapur Ao Youth Organisation (DAYO) for players from Dimapur, Chümoukedima and Niuland.',
+      venue: 'Indoor Stadium, Multi-Disciplinary Sports Complex', city: 'Dimapur',
+      start_date: '2024-12-16 03:30:00', end_date: '2024-12-17 14:30:00',
+      level: 'open', status: 'completed', organizer: 'Dimapur Ao Youth Organisation (DAYO)' },
   ];
 
   for (const row of tournamentRows) {
@@ -561,12 +587,12 @@ async function seed({ plans, courts }) {
   }
 
   // -- posts ------------------------------------------------------------------
-  // The home page is a newsroom, so an empty posts collection makes the whole
-  // site look broken. These rows are what the club would actually publish:
-  // fixture news, results, a facility notice, and circulars from the governing
-  // bodies — the last credited to their source, never presented as club copy.
+  // The club's real stories. A story drawn from outside coverage credits it in
+  // source_name / source_url and is written in our own words, not copied.
+  // The launch batch is dated to the day each event finished, so the feed
+  // reads in the order things happened.
   const tournamentIds = new Map();
-  for (const slug of ['club-championship-2026', 'dimapur-district-open-2026', 'summer-smash-2026']) {
+  for (const { slug } of tournamentRows) {
     try {
       const record = await pb.collection('tournaments').getFirstListItem(
         pb.filter('slug = {:slug}', { slug }),
@@ -580,123 +606,166 @@ async function seed({ plans, courts }) {
 
   const postRows = [
     {
-      title: 'Club Championship draw is published on 12 September',
-      slug: 'club-championship-2026-draw-published',
+      title: 'Hornbill Festival Invitational Badminton Championship comes to Chümoukedima, 2–5 December',
+      slug: 'hornbill-2026-announcement',
       category: 'tournament',
       summary:
-        'Entries close on 10 September and the seeded draw goes up two days later, across all five events. Groups of three or four depending on how many of you enter.',
+        'The Nagaland Badminton Association\'s Hornbill Festival Invitational runs from 2 to 5 December at the Regional Centre for Sporting Excellence, Sovima, with INR 9,00,000 in prize money across nine events. Entries close on 25 November.',
       body: [
-        'The 2026 Club Championship runs from 19 to 21 September at Shuttlers Arena, and it is the one weekend of the year every event is played out properly — MS, WS, MD, WD and XD, group stage into a knockout draw.',
-        '## What happens between now and then',
-        '- Entries close at 11:59pm on 10 September. Enter through your dashboard.',
-        '- Seedings are settled on 11 September from this season\'s club results.',
-        '- The draw is published here on 12 September, and the group tables go live as scores come in.',
-        'Entry is Rs 500 per event. If you are entering a doubles event, name your partner when you enter — unpartnered entries go into a pool and we will pair you up.',
-        '## Format',
-        'Group stage first, groups of three or four depending on entries, then the top two from each group into a single-elimination draw. Everything is best of three games to 21.',
+        'The Nagaland Badminton Association is hosting the Hornbill Festival Invitational Badminton Championship 2026 from 2 to 5 December, as part of this year\'s Hornbill Festival. Play is at the Regional Centre for Sporting Excellence, Sovima, Chümoukedima.',
+        '## Events',
+        [
+          '- U-15 girls\' singles',
+          '- U-17 boys\' doubles',
+          '- Men\'s doubles (open)',
+          '- Women\'s doubles (open)',
+          '- 75+ combined age (each player 35 and above)',
+          '- 85+ combined age (35 and above)',
+          '- 95+ combined age (45 and above)',
+          '- 105+ combined age (45 and above)',
+          '- 115+ combined age (55 and above)',
+        ].join('\n'),
+        'A player may enter at most three events. Matches are best of three games, first to 15 points.',
+        '## Prize money',
+        'INR 9,00,000 in total. In each event the champions take INR 50,000, the runners-up INR 30,000 and each losing semi-finalist INR 10,000.',
+        '## Key dates',
+        [
+          '- Entries close: Wednesday 25 November',
+          '- Last day to withdraw with a refund: Thursday 26 November',
+          '- First entry list: Thursday 26 November',
+          '- Final entry list: Friday 27 November',
+          '- Draw: Saturday 28 November',
+        ].join('\n'),
+        '## How to enter',
+        'Fill in the registration form below, one form per pair (a separate form for each event with a different partner), and send it to the tournament secretary, Er. Ichirang Zeliang, on +91 96155 41951 or at hornbillbadminton@gmail.com. Entry is INR 3,000 per pair and INR 2,000 for singles; payment details are on the form. Bring a BWF, BAI or NBA player ID, or a passport.',
+        'The pamphlet below lists an earlier venue and entry deadline. The details here, from the registration form, are the current ones.',
+        'Off court, the championship runs alongside the Hornbill Festival extravaganza: ethnic food and handicraft stalls, souvenirs, and music every evening.',
       ].join('\n\n'),
-      tournamentSlug: 'club-championship-2026',
-      published_at: '2026-08-28 09:00:00',
+      tournamentSlug: 'hornbill-2026',
+      coverPath: 'src/assets/hornbill-2026/cover.jpeg',
+      // Uploaded under these names; the article lists them as downloads.
+      attachmentFiles: [
+        { path: 'src/assets/hornbill-2026/registration-form.pdf', name: 'Registration form.pdf' },
+        { path: 'src/assets/hornbill-2026/pamphlet.jpeg', name: 'Pamphlet.jpeg' },
+      ],
+      published_at: '2026-11-25 09:00:00',
+      status: 'published',
+    },
+    {
+      title: 'Shuttlers United to host the 9th Dimapur District Interclub on 27–28 November',
+      slug: 'interclub-2026-announcement',
+      category: 'tournament',
+      summary:
+        'Clubs from across Dimapur meet at the Livingstone Foundation College Indoor Stadium this Friday and Saturday for the 9th Dimapur District Interclub Badminton Tournament, held in memory of Late Shri. Mayang Lima. Four age categories, Rs. 72,000 in prize money.',
+      body: [
+        'Shuttlers United is proud to host the 9th Dimapur District Interclub Badminton Tournament 2026, under the aegis of the Dimapur District Badminton Association. Play runs over two days, 27 and 28 November, at the Livingstone Foundation College Indoor Stadium, Landmark Colony, Dimapur.',
+        'This year\'s edition is held in memory of Late Shri. Mayang Lima, and brings together clubs from across the district for two days of competitive interclub badminton.',
+        '## Categories',
+        'The tournament is contested in four doubles categories:',
+        [
+          '- 75+ (minimum age 35)',
+          '- 85+ (minimum age 40)',
+          '- 95+ (minimum age 45)',
+          '- 105+ (minimum age 45)',
+        ].join('\n'),
+        '## Prizes',
+        'A total of Rs. 72,000 in prize money will be awarded across the categories, along with certificates, medals and souvenirs.',
+        '## The draw',
+        'Each category is played as a knockout from the round of 16. The draw for all four categories is on the tournament page and will be updated with names, fixtures and results as the event progresses.',
+        '## With thanks',
+        'The club thanks our event partners, State Bank of India and Anil Steel, for their support, and the organising committee, led by convenor Tali Pongener, for the months of work behind the event.',
+        'Players, families and badminton lovers are warmly invited to come and watch. We look forward to welcoming every club to Dimapur.',
+      ].join('\n\n'),
+      tournamentSlug: 'dimapur-interclub-2026',
+      // The event poster, uploaded from the repo so a fresh seed has the cover.
+      coverPath: 'src/assets/interclub-2026.jpeg',
+      published_at: '2026-11-25 04:30:00',
       is_pinned: true,
       status: 'published',
     },
     {
-      title: 'Nagaland Badminton Association opens 2026-27 player registration',
-      slug: 'nba-2026-27-player-registration',
-      category: 'governing-body',
-      summary:
-        'Anyone planning to enter a district or state ranking tournament this season needs a current NBA player ID. Registration is open until 30 September.',
-      body: [
-        'The Nagaland Badminton Association has opened player registration for the 2026-27 season. A current NBA player ID is required to enter any district or state ranking event, including the Dimapur District Open in October.',
-        '## What you need',
-        '- A passport photograph and a government photo ID.',
-        '- A date-of-birth proof — the birth certificate or the school leaving certificate, not an Aadhaar card, for age-category events.',
-        '- The registration fee, paid to the association directly.',
-        'Registration closes on 30 September. If you want help with the paperwork, bring it to a Tuesday session and we will go through it with you.',
-      ].join('\n\n'),
-      source_name: 'Nagaland Badminton Association',
-      published_at: '2026-08-26 11:30:00',
-      status: 'published',
-    },
-    {
-      title: 'BAI moves the junior age-category cut-off to 1 October',
-      slug: 'bai-junior-age-category-cut-off',
-      category: 'governing-body',
-      summary:
-        'The Badminton Association of India has shifted the age-band reference date. Two of our U-17 players move up a category for the coming season.',
-      body: [
-        'The Badminton Association of India has confirmed that junior age categories for the 2026-27 season will be calculated against 1 October rather than 1 January. The change aligns the domestic calendar with the BWF junior circuit.',
-        'In practice it means anyone whose birthday falls between January and September is now measured a year older than they would have been under the old rule. Two of our U-17 players move into U-19 for the season.',
-        'If you compete in age-category events, check which band you now fall into before entering anything. We have flagged it against the affected profiles.',
-      ].join('\n\n'),
-      source_name: 'Badminton Association of India',
-      source_url: 'https://www.badmintonindia.org/',
-      published_at: '2026-08-21 16:00:00',
-      status: 'published',
-    },
-    {
-      title: 'Five members entered for the Dimapur District Open',
-      slug: 'district-open-2026-entries',
-      category: 'tournament',
-      summary:
-        'Qualifying starts on 10 October at Dimapur Indoor Stadium. Five of ours are in, across singles and doubles.',
-      body: [
-        'Five members have entered the Dimapur District Open, played from 10 to 13 October at the Dimapur Indoor Stadium. Unseeded entries play qualifying on the first day; the main draw of 32 starts on the Saturday.',
-        'The club covers half the entry fee for any member entered in a district-level event or above. Claim it through your dashboard once your entry is confirmed by the organisers.',
-        'We will post the draw and results here as they come through.',
-      ].join('\n\n'),
-      tournamentSlug: 'dimapur-district-open-2026',
-      published_at: '2026-08-18 10:00:00',
-      status: 'published',
-    },
-    {
-      title: 'Court 3 resurfaced — synthetic mat down from Monday',
-      slug: 'court-3-resurfaced',
-      category: 'facility',
-      summary:
-        'The worn synthetic on Court 3 has been replaced. It is out of the booking calendar until Monday morning, and the hourly rate stays where it is.',
-      body: [
-        'Court 3 has been resurfaced with a new BWF-approved synthetic mat. The old surface had gone slick along the tramlines on the north side, which is where most of the slips this year happened.',
-        'The court is out of the booking calendar until 6am Monday while the mat settles. Courts 1 and 2 are unaffected.',
-        'The hourly rate for Court 3 is unchanged.',
-      ].join('\n\n'),
-      published_at: '2026-08-14 08:30:00',
-      status: 'published',
-    },
-    {
-      title: 'Summer Smash: men\'s doubles title, and a mixed doubles final',
-      slug: 'summer-smash-2026-report',
+      title: "Two silver medals for Shuttlers United at DAYO's 2nd Ao Open",
+      slug: 'ao-open-2026-silver-medals',
       category: 'result',
       summary:
-        'Two finals from an eight-club invitational, and one trophy home. The full draw and every score is on the tournament page.',
+        'Dr. Along Nokdir and Katemjongshi took silver in the 85+ category, and Salang Jamir and Imolong Jamir silver in the men\'s category, at the Dimapur Ao Youth Organisation\'s tournament on 20–21 November.',
       body: [
-        'The Summer Smash Invitational brought eight clubs to the DDSC Indoor Stadium over a weekend in June: a round-robin group stage on the Saturday, knockouts on the Sunday.',
-        'Our men\'s doubles pair came through the group unbeaten and took the title in straight games. The mixed doubles pair reached the final and lost a third game that could have gone either way at 19-all.',
-        'Every match, game by game, is on the tournament page.',
+        'Shuttlers United came home from the 2nd Ao Open Badminton Tournament 2026 with two silver medals.',
+        'The tournament was organised by the Dimapur Ao Youth Organisation (DAYO) at the Indoor Stadium of the Multi Disciplinary Sports Complex, Dimapur, on 20 and 21 November under the theme "Asaya Ajanga Telongjem" (Unity through Sports). 56 teams competed across five categories: men\'s doubles (open), mixed doubles, and veterans\' 85+, 105+ and 120+ doubles.',
+        '## Our medals',
+        [
+          '- Silver, 85+ category: Dr. Along Nokdir and Katemjongshi',
+          '- Silver, men\'s category: Salang Jamir and Imolong Jamir',
+        ].join('\n'),
+        'It is a second Ao Open final for Salang, who also took silver in the men\'s category at the first edition, the 1st DCN Ao Open in December 2024.',
+        'Congratulations to both pairs, and thanks to DAYO for hosting.',
       ].join('\n\n'),
-      tournamentSlug: 'summer-smash-2026',
-      published_at: '2026-06-16 19:00:00',
+      source_name: 'The Morung Express',
+      source_url: 'https://www.morungexpress.com/dayos-2nd-ao-open-badminton-tournament-features-56-teams',
+      tournamentSlug: 'ao-open-2026',
+      // The prize-winners' photo from the closing day, and DAYO's poster.
+      coverPath: 'src/assets/ao-open-2026/cover.jpeg',
+      attachmentFiles: [{ path: 'src/assets/ao-open-2026/poster.jpeg', name: 'Poster.jpeg' }],
+      published_at: '2026-11-21 12:00:00',
       status: 'published',
     },
     {
-      title: 'Dues reminders now go out on the 1st',
-      slug: 'dues-reminders-on-the-first',
-      category: 'notice',
+      title: 'Gold and silver for Shuttlers United at the Nagaland Masters',
+      slug: 'nagaland-masters-2026-gold',
+      category: 'result',
       summary:
-        'Monthly dues reminders are sent on the 1st of each month by WhatsApp. Pay from your dashboard — UPI, card or netbanking, receipt is instant.',
+        'Club president Amai Chingkhu and Raj Kumar Das won the men\'s doubles 45+ title, and Nadu Yaden took silver in the men\'s doubles 60+, at the Nagaland Masters Badminton Championship 2026 in Dimapur.',
       body: [
-        'Monthly dues reminders now go out automatically on the 1st of each month to the number you signed up with. No more chasing in the group chat.',
-        'You can settle from your dashboard at any point in the month. The receipt lands immediately and your payment history stays on your account.',
+        'Club president Amai Chingkhu and Raj Kumar Das are Nagaland Masters champions, winning gold in the men\'s doubles 45+ category at the Nagaland Masters Badminton Championship 2026.',
+        'The championship, organised by the Nagaland Badminton Association, was played on 23 and 24 October at the Dimapur Badminton Club Stadium in United Colony, Dimapur. 104 players took part across 72 entries and seven categories: 35+, 40+, 45+, 50+, 55+, 60+ and mixed doubles.',
+        'Nadu Yaden added a silver medal in the men\'s doubles 60+ category.',
+        'For Amai and Raj Kumar Das it is a second state-level podium of the season, after their silver in the men\'s doubles 40 category at the 48th Inter District and State Badminton Championship in Mon in September.',
+        'Congratulations to all three.',
       ].join('\n\n'),
-      published_at: '2026-08-05 07:00:00',
+      source_name: 'The Morung Express',
+      source_url: 'https://www.morungexpress.com/nagaland-masters-badminton-championship-2026-concludes',
+      tournamentSlug: 'nagaland-masters-2026',
+      // The podium (the 45+ gold) and the pair in play, from NBA's coverage.
+      coverPath: 'src/assets/nagaland-masters-2026/cover.jpeg',
+      attachmentFiles: [
+        { path: 'src/assets/nagaland-masters-2026/podium.jpeg', name: 'On the podium.jpeg' },
+        { path: 'src/assets/nagaland-masters-2026/in-play.jpeg', name: 'In play.jpeg' },
+      ],
+      published_at: '2026-10-24 12:00:00',
+      status: 'published',
+    },
+    {
+      title: 'Silver for Amai Chingkhu and Raj Kumar Das at the state championship',
+      slug: 'nba-state-championship-2026-silver',
+      category: 'result',
+      summary:
+        'Club president Amai Chingkhu and Raj Kumar Das finished runners-up in the men\'s doubles 40 category at the 48th Inter District and State Badminton Championship 2026 in Mon.',
+      body: [
+        'Club president Amai Chingkhu and Raj Kumar Das came home from the 48th Inter District and State Badminton Championship 2026 with a silver medal in the men\'s doubles 40 category.',
+        'The championship, held under the Nagaland Badminton Association, concluded at the Indoor Badminton Stadium in Mon on 4 September, with players from districts across the state competing in open, age-group and veterans categories.',
+        '## The final',
+        'Playing for Longleng and Dimapur, Amai and Raj Kumar Das reached the men\'s doubles 40 final, where they finished runners-up to Sendongyanger and Toshikaba of Mokokchung.',
+        'Congratulations to both on a podium finish at state level.',
+      ].join('\n\n'),
+      tournamentSlug: 'nba-state-championship-2026',
+      published_at: '2026-09-04 12:00:00',
       status: 'published',
     },
   ];
 
-  for (const { tournamentSlug, ...row } of postRows) {
+  for (const { tournamentSlug, coverPath, attachmentFiles, ...row } of postRows) {
     const record = { ...row };
     const tournamentId = tournamentSlug ? tournamentIds.get(tournamentSlug) : undefined;
     if (tournamentId) record.tournament = tournamentId;
+    if (coverPath) {
+      record.cover = new File([readFileSync(new URL(`../${coverPath}`, import.meta.url))],
+        coverPath.split('/').pop(), { type: 'image/jpeg' });
+    }
+    if (attachmentFiles) {
+      record.attachments = attachmentFiles.map(({ path, name }) =>
+        new File([readFileSync(new URL(`../${path}`, import.meta.url))], name,
+          { type: path.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg' }));
+    }
 
     try {
       const existing = await pb.collection('posts').getFirstListItem(

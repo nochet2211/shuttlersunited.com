@@ -13,7 +13,20 @@ import type {
  * who won a match.
  */
 
-export const EVENT_ORDER: MatchEvent[] = ['MS', 'WS', 'MD', 'WD', 'XD'];
+export const EVENT_ORDER: MatchEvent[] = [
+  'MS',
+  'WS',
+  'MD',
+  'WD',
+  'XD',
+  'MD40',
+  'MD45',
+  'MD60',
+  '75+',
+  '85+',
+  '95+',
+  '105+',
+];
 
 export const EVENT_NAMES: Record<MatchEvent, string> = {
   MS: "Men's singles",
@@ -21,6 +34,13 @@ export const EVENT_NAMES: Record<MatchEvent, string> = {
   MD: "Men's doubles",
   WD: "Women's doubles",
   XD: 'Mixed doubles',
+  MD40: "Men's doubles 40+",
+  MD45: "Men's doubles 45+",
+  MD60: "Men's doubles 60+",
+  '75+': '75+ doubles',
+  '85+': '85+ doubles',
+  '95+': '95+ doubles',
+  '105+': '105+ doubles',
 };
 
 /** Earliest round first. Bracket columns are laid out in this order. */
@@ -39,12 +59,14 @@ export const ROUND_LABELS: Record<MatchRound, string> = {
 
 /**
  * How a finish is written out. Lives here beside EVENT_NAMES and ROUND_LABELS
- * so the newsroom and the tournament pages agree on the wording.
+ * so the newsroom and the tournament pages agree on the wording. A podium
+ * finish is named by its medal, the way the Medals icons name it; see
+ * MEDAL_FOR in src/lib/members.ts.
  */
 export const RESULT_LABELS: Record<TournamentResult, string> = {
-  winner: 'Winner',
-  'runner-up': 'Runner-up',
-  'semi-final': 'Semi-finalist',
+  winner: 'Gold',
+  'runner-up': 'Silver',
+  'semi-final': 'Bronze',
   'quarter-final': 'Quarter-finalist',
   'round-of-16': 'Round of 16',
   'group-stage': 'Group stage',

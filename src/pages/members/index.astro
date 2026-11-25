@@ -5,11 +5,22 @@ import Badge from "../../components/ui/Badge.astro";
 import Avatar from "../../components/ui/Avatar.astro";
 import Eyebrow from "../../components/ui/Eyebrow.astro";
 import Empty from "../../components/ui/Empty.astro";
-import Button from "../../components/ui/Button.astro";
-import { listPublicMembers } from "../../lib/queries";
+import Medals from "../../components/ui/Medals.astro";
+import { listPublicMembers, medalsByMember } from "../../lib/queries";
 import { memberAvatar } from "../../lib/files";
+import {
+  allMedals,
+  byOfficeThenName,
+  competitiveLabel,
+  haloFor,
+} from "../../lib/members";
 
-const members = await listPublicMembers();
+// Office bearers lead by rank; everyone else stays alphabetical below them.
+const [roster, medals] = await Promise.all([
+  listPublicMembers(),
+  medalsByMember(),
+]);
+const members = roster.sort(byOfficeThenName);
 
 // Facets are derived from who is actually in the club, so the filter bar never
 // offers a category with nothing behind it.
@@ -24,36 +35,32 @@ const availableLevels = levels.filter((level) =>
 );
 
 const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
+
+// The line under the name: skill level when there is one, otherwise "Member".
+// A member with a badge (office or playing level) already has a label, so
+// they get no fallback. City is left out — the whole club is in Dimapur.
+const subtitle = (member: (typeof members)[number]) =>
+  member.skill_level
+    ? titleCase(member.skill_level)
+    : member.office || member.competes_at
+      ? ""
+      : "Member";
 ---
 
 <Layout
-  title="Players"
+  title="Members"
   description="Every member of Shuttlers United — playing style, preferred events, and the gear they use."
 >
   <div class="shell">
     <header class="flex flex-col gap-2 border-b border-hairline-soft pb-8">
       <Eyebrow>The roster</Eyebrow>
-      <h1 class="heading-lg">Players</h1>
-      <p class="subtitle-md max-w-xl text-body">
-        {members.length}{" "}
-        {members.length === 1 ? "member" : "members"} with a public profile. Filter
-        by event or level to find a partner.
-      </p>
+      <h1 class="heading-lg">Members</h1>
     </header>
 
     {
       members.length === 0 ? (
         <Empty title="No profiles yet" class="mt-8">
           Members appear here once they join and make their profile public.
-          <Button
-            slot="action"
-            href="/join"
-            variant="primary"
-            size="sm"
-            class="mt-4"
-          >
-            Join the club
-          </Button>
         </Empty>
       ) : (
         <>
@@ -61,7 +68,7 @@ const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
             <div
               class="flex flex-wrap items-center gap-2 py-6"
               role="group"
-              aria-label="Filter players"
+              aria-label="Filter members"
             >
               <button
                 type="button"
@@ -108,31 +115,63 @@ const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
                 data-level={member.skill_level ?? ""}
               >
                 <Card
-                  href={`/players/${member.slug}`}
+                  href={`/members/${member.slug}`}
                   padding="md"
-                  class="h-full"
+                  class="card-gradient h-full"
                 >
-                  <div class="flex h-full flex-col gap-4">
-                    <div class="flex items-start gap-3">
+                  <div class="flex h-full flex-col justify-center gap-4">
+                    <div class="flex items-center gap-3">
                       <Avatar
                         name={member.name}
                         src={memberAvatar(member)}
                         size="lg"
+                        halo={haloFor(member)}
                       />
-                      <div class="flex min-w-0 flex-col gap-0.5 pt-1">
+                      <div class="flex min-w-0 flex-col gap-0.5">
                         <p class="heading-md truncate">{member.name}</p>
-                        <p class="truncate text-[14px] leading-5 text-mute">
-                          {member.skill_level
-                            ? titleCase(member.skill_level)
-                            : "Member"}
-                          {member.city ? ` · ${member.city}` : ""}
-                        </p>
-                        {member.jersey_number != null && (
+                        {(member.office || member.competes_at) && (
+                          <div class="my-0.5 flex flex-wrap gap-1">
+                            {member.office && (
+                              <Badge
+                                tone="bare"
+                                class="border-gold bg-gold-tint text-ink"
+                              >
+                                {member.office}
+                              </Badge>
+                            )}
+                            {member.competes_at && (
+                              <Badge
+                                tone="bare"
+                                class="border-pro bg-pro-tint text-ink"
+                              >
+                                {competitiveLabel(member.competes_at)}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        {subtitle(member) && (
+                          <p class="truncate text-[14px] leading-5 text-mute">
+                            {subtitle(member)}
+                          </p>
+                        )}
+                        {/* PocketBase returns an unset number as 0, so 0 means none. */}
+                        {Boolean(member.jersey_number) && (
                           <p class="text-[12px] leading-4 text-faint">
                             #{member.jersey_number}
                           </p>
                         )}
                       </div>
+                      {/* Pinned top-right, clear of the name, so a card with
+                          medals keeps the same text alignment as one without. */}
+                      <Medals
+                        wins={allMedals(
+                          medals.get(member.id) ?? [],
+                          member.honours,
+                        )}
+                        grouped
+                        align="end"
+                        class="ml-auto shrink-0 self-start"
+                      />
                     </div>
 
                     {member.bio && (
@@ -141,16 +180,20 @@ const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
                       </p>
                     )}
 
-                    <div class="mt-auto flex flex-wrap items-center gap-1.5">
-                      {member.preferred_events?.map((event) => (
-                        <Badge>{event}</Badge>
-                      ))}
-                      {member.handedness && (
-                        <Badge tone="neutral">
-                          {titleCase(member.handedness)}-handed
-                        </Badge>
-                      )}
-                    </div>
+                    {/* Only when there is something to show: an empty row still
+                        takes the flex gap and leaves dead space under the name. */}
+                    {(member.preferred_events?.length || member.handedness) && (
+                      <div class="mt-auto flex flex-wrap items-center gap-1.5">
+                        {member.preferred_events?.map((event) => (
+                          <Badge>{event}</Badge>
+                        ))}
+                        {member.handedness && (
+                          <Badge tone="neutral">
+                            {titleCase(member.handedness)}-handed
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </Card>
               </article>
@@ -162,7 +205,7 @@ const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
             hidden
             class="py-12 text-center text-[14px] leading-5 text-mute"
           >
-            No players match that filter.
+            No members match that filter.
           </p>
         </>
       )

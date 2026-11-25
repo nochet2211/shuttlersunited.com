@@ -18,8 +18,8 @@ import {
   categoryLabel,
   categoryVars,
   postCover,
-  timeAgo,
 } from "../../lib/news";
+import { shortDate } from "../../lib/format";
 import type { Post } from "../../lib/types";
 
 interface Props {
@@ -33,7 +33,10 @@ const { post, variant = "row", class: className } = Astro.props;
 const href = `/news/${post.slug}`;
 // The lead story earns a real image; the feed rows stay on thumbnails.
 const cover = postCover(post, variant === "feature" ? "1200x630" : "400x300");
-const published = timeAgo(post.published_at);
+// The date, not "4 hours ago": the feed opened with a batch of stories dated
+// to when their events happened, and a relative time would make them all
+// look posted at once.
+const published = shortDate(post.published_at);
 const label = categoryLabel(post.category);
 const vars = categoryVars(post.category);
 const badge = CATEGORY_BADGE[post.category];

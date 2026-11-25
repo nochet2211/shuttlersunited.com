@@ -1,11 +1,213 @@
 ---
 /**
- * The news page and the home page are the same page. This route only exists so
- * that /news/<slug> has a parent that resolves, and so any link already
- * pointing at /news lands somewhere sensible.
+ * The club's newsroom — all published news sorted by time, pinned stories
+ * first. It was the home page until the Interclub landing page took over /;
+ * when that comes down, move this file back to src/pages/index.astro.
  *
- * A temporary redirect rather than a permanent one: browsers cache a 308 hard
- * enough that undoing this later would strand anyone who had visited.
+ * What is happening right now, what is coming, and anything from the
+ * associations that changes how you enter a tournament.
+ * The membership pitch lives on /join; a visitor who lands here wants news,
+ * and a returning member wants to know what changed.
  */
-return Astro.redirect(`/${Astro.url.search}`, 302);
+import Layout from "../../layouts/Layout.astro";
+import Button from "../../components/ui/Button.astro";
+import Badge from "../../components/ui/Badge.astro";
+import ResultBadge from "../../components/tournament/ResultBadge.astro";
+import Empty from "../../components/ui/Empty.astro";
+import FixtureStrip from "../../components/news/FixtureStrip.astro";
+import PostCard from "../../components/news/PostCard.astro";
+import Rail from "../../components/news/Rail.astro";
+import {
+  duesStatusFor,
+  fixtureBoard,
+  listLiveMatches,
+  listPosts,
+  recentResults,
+} from "../../lib/queries";
+import { dateRange, fixtureTiming } from "../../lib/news";
+import { periodLabel } from "../../lib/format";
+
+const { member } = Astro.locals;
+
+const [posts, board, live, results] = await Promise.all([
+  listPosts(),
+  fixtureBoard(),
+  listLiveMatches(),
+  recentResults(4),
+]);
+
+// The rail's member card only makes sense for someone signed in, so the dues
+// read is conditional rather than part of the batch above.
+const dues = member ? await duesStatusFor(member.id) : null;
+
+// The pinned story leads the page as a feature panel; the rest run as rows.
+// listPosts() already sorts pinned-first, so the lead is the head of the list
+// when it is pinned at all.
+const lead = posts[0]?.is_pinned ? posts[0] : null;
+const rest = lead ? posts.slice(1) : posts;
 ---
+
+<Layout
+  title="News"
+  description="Club news from Shuttlers United, Dimapur — fixtures, results, court notices and circulars from the badminton associations."
+  bleed
+>
+  <FixtureStrip ongoing={board.ongoing} upcoming={board.upcoming} live={live} />
+
+  {/* ------------------------------------------------------- feed + rail */}
+  <section
+    class="shell grid gap-8 pt-10 pb-20 md:pt-12 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10 md:pb-24"
+  >
+    {/* --------------------------------------------------------- feed */}
+    <div class="flex min-w-0 flex-col gap-5">
+      <div class="border-b border-hairline-soft pb-3">
+        <h2
+          class="tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute"
+        >
+          Latest
+        </h2>
+      </div>
+
+      {
+        posts.length > 0 ? (
+          <div class="flex flex-col gap-4">
+            {lead && <PostCard post={lead} variant="feature" class="mb-1" />}
+            {rest.map((post) => (
+              <PostCard post={post} />
+            ))}
+          </div>
+        ) : (
+          <Empty title="Nothing published yet">
+            Once the club posts its first story it appears here, along with the
+            fixture list and the latest results.
+            <Button
+              slot="action"
+              href="/tournaments"
+              variant="secondary"
+              size="sm"
+            >
+              Browse tournaments
+            </Button>
+          </Empty>
+        )
+      }
+    </div>
+
+    {/* --------------------------------------------------------- rail */}
+    <aside class="flex min-w-0 flex-col gap-5">
+      {
+        /* A signed-in member's own state comes first — it is the one thing on
+          this page only they can act on. */
+      }
+      {
+        member && dues && (
+          <Rail
+            title="Your dues"
+            href="/dashboard/payments"
+            linkLabel="Open"
+            accent="bg-cat-club"
+            accentTint="bg-cat-club-tint"
+          >
+            <div class="flex flex-col gap-3 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-[14px] leading-5 text-body">
+                  {periodLabel(dues.period)}
+                </span>
+                <Badge tone={dues.paid ? "neutral" : "ink"}>
+                  {dues.paid ? "Settled" : "Due"}
+                </Badge>
+              </div>
+              {!dues.paid && (
+                <Button href="/dashboard/payments" variant="buy" size="sm" full>
+                  Pay this month
+                </Button>
+              )}
+            </div>
+          </Rail>
+        )
+      }
+
+      {/* ------------------------------------------------------ up next */}
+      <Rail
+        title="Up next"
+        href="/tournaments"
+        accent="bg-cat-tournament"
+        accentTint="bg-cat-tournament-tint"
+      >
+        {
+          board.upcoming.length > 0 || board.ongoing.length > 0 ? (
+            <ul class="divide-y divide-hairline-soft">
+              {[...board.ongoing, ...board.upcoming]
+                .slice(0, 4)
+                .map((fixture) => (
+                  <li>
+                    <a
+                      href={`/tournaments/${fixture.slug}`}
+                      class="group flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-soft"
+                    >
+                      <span class="text-[14px] font-medium leading-5 text-ink group-hover:underline">
+                        {fixture.name}
+                      </span>
+                      <span class="text-[12px] leading-4 text-faint">
+                        {fixtureTiming(fixture.start_date, fixture.end_date)}
+                        {" · "}
+                        {dateRange(fixture.start_date, fixture.end_date)}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p class="px-4 py-6 text-center text-[13px] leading-5 text-mute">
+              Nothing on the calendar right now.
+            </p>
+          )
+        }
+      </Rail>
+
+      {/* ----------------------------------------------- recent results */}
+      <Rail
+        title="Recent results"
+        href="/tournaments"
+        accent="bg-cat-result"
+        accentTint="bg-cat-result-tint"
+      >
+        {
+          results.length > 0 ? (
+            <ul class="divide-y divide-hairline-soft">
+              {results.map((entry) => (
+                <li class="flex items-start justify-between gap-3 px-4 py-3">
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <a
+                      href={
+                        entry.expand?.member?.slug
+                          ? `/members/${entry.expand.member.slug}`
+                          : "/members"
+                      }
+                      class="truncate text-[14px] font-medium leading-5 text-ink hover:underline"
+                    >
+                      {entry.expand?.member?.name ?? "Club member"}
+                    </a>
+                    <span class="truncate text-[12px] leading-4 text-faint">
+                      {entry.event}
+                      {entry.expand?.tournament
+                        ? ` · ${entry.expand.tournament.name}`
+                        : ""}
+                    </span>
+                  </div>
+                  <span class="shrink-0 pt-0.5">
+                    <ResultBadge result={entry.result} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="px-4 py-6 text-center text-[13px] leading-5 text-mute">
+              No results recorded yet.
+            </p>
+          )
+        }
+      </Rail>
+    </aside>
+  </section>
+</Layout>

@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import Card from "../../components/ui/Card.astro";
 import Badge from "../../components/ui/Badge.astro";
+import ResultBadge from "../../components/tournament/ResultBadge.astro";
 import Avatar from "../../components/ui/Avatar.astro";
 import Eyebrow from "../../components/ui/Eyebrow.astro";
 import Button from "../../components/ui/Button.astro";
@@ -11,6 +12,13 @@ import {
   listEntriesFor,
 } from "../../lib/queries";
 import { memberAvatar } from "../../lib/files";
+import Medals from "../../components/ui/Medals.astro";
+import {
+  allMedals,
+  competitiveLabel,
+  haloFor,
+  medalsFrom,
+} from "../../lib/members";
 import { age, shortDate } from "../../lib/format";
 import type { TournamentResult } from "../../lib/types";
 
@@ -34,24 +42,13 @@ const [gear, entries] = await Promise.all([
 ]);
 
 const currentGear = gear.filter((item) => item.is_current);
+// Honours the club knows of with no dated tournament behind them.
+const honours = Array.isArray(member.honours) ? member.honours : [];
+const medalDot = { gold: "bg-gold", silver: "bg-silver", bronze: "bg-bronze" };
 const podium: TournamentResult[] = ["winner", "runner-up", "semi-final"];
 const accolades = entries.filter((entry) => podium.includes(entry.result));
-const titles = entries.filter((entry) => entry.result === "winner").length;
 
 const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
-
-const resultLabels: Record<TournamentResult, string> = {
-  winner: "Winner",
-  "runner-up": "Runner-up",
-  "semi-final": "Semi-finalist",
-  "quarter-final": "Quarter-finalist",
-  "round-of-16": "Round of 16",
-  "group-stage": "Group stage",
-  participated: "Participated",
-};
-
-const resultTone = (result: TournamentResult) =>
-  result === "winner" ? "ink" : result === "runner-up" ? "accent" : "neutral";
 
 // Only render a row when there is something in it — an empty"—" grid reads as
 // broken rather than sparse.
@@ -71,7 +68,6 @@ const vitals = [
     label: "Level",
     value: titleCase(member.skill_level),
   },
-  member.city && { label: "Based in", value: member.city },
   member.joined_on && {
     label: "Member since",
     value: shortDate(member.joined_on),
@@ -87,10 +83,10 @@ const isOwnProfile = viewer?.id === member.id;
 >
   <div class="shell">
     <a
-      href="/players"
+      href="/members"
       class="text-[14px] leading-5 text-mute transition-colors hover:text-ink"
     >
-      ← All players
+      ← All members
     </a>
 
     {/* ------------------------------------------------------------- header */}
@@ -101,18 +97,41 @@ const isOwnProfile = viewer?.id === member.id;
         name={member.name}
         src={memberAvatar(member, "400x400")}
         size="xl"
+        halo={haloFor(member)}
       />
 
       <div class="flex flex-1 flex-col gap-3">
         <div class="flex flex-col gap-1">
           {
-            member.jersey_number != null && (
+            Boolean(member.jersey_number) && (
               <Eyebrow>Squad no. {member.jersey_number}</Eyebrow>
+            )
+          }
+          {
+            (member.office || member.competes_at) && (
+              <div class="mb-1 flex flex-wrap gap-1.5">
+                {member.office && (
+                  <Badge tone="bare" class="border-gold bg-gold-tint text-ink">
+                    {member.office}, Shuttlers United
+                  </Badge>
+                )}
+                {member.competes_at && (
+                  <Badge tone="bare" class="border-pro bg-pro-tint text-ink">
+                    {competitiveLabel(member.competes_at)}
+                  </Badge>
+                )}
+              </div>
             )
           }
           <h1 class="display-lg text-ink">
             {member.name}
           </h1>
+          <Medals
+            wins={allMedals(medalsFrom(entries), member.honours)}
+            size="md"
+            side="bottom"
+            class="mt-2"
+          />
         </div>
 
         {
@@ -128,13 +147,6 @@ const isOwnProfile = viewer?.id === member.id;
             member.preferred_events?.map((event) => (
               <Badge tone="neutral">{event}</Badge>
             ))
-          }
-          {
-            titles > 0 && (
-              <Badge tone="ink">
-                {titles} {titles === 1 ? "title" : "titles"}
-              </Badge>
-            )
           }
           {!member.is_public && <Badge tone="warning">Private profile</Badge>}
         </div>
@@ -227,9 +239,7 @@ const isOwnProfile = viewer?.id === member.id;
                             {partner || "—"}
                           </td>
                           <td class="px-4 py-3">
-                            <Badge tone={resultTone(entry.result)}>
-                              {resultLabels[entry.result]}
-                            </Badge>
+                            <ResultBadge result={entry.result} />
                           </td>
                         </tr>
                       );
@@ -249,9 +259,7 @@ const isOwnProfile = viewer?.id === member.id;
                 {accolades.slice(0, 4).map((entry) => (
                   <Card padding="md">
                     <div class="flex flex-col gap-1.5">
-                      <Badge tone={resultTone(entry.result)} class="self-start">
-                        {resultLabels[entry.result]}
-                      </Badge>
+                      <ResultBadge result={entry.result} class="self-start" />
                       <p class="text-[14px] font-medium leading-5 text-ink">
                         {entry.expand?.tournament?.name ?? "Tournament"}
                       </p>
@@ -322,6 +330,40 @@ const isOwnProfile = viewer?.id === member.id;
             )
           }
         </Card>
+
+        {
+          honours.length > 0 && (
+            <Card padding="none">
+              <h2 class="border-b border-hairline-soft px-5 py-4 eyebrow">
+                Honours
+              </h2>
+              <ul class="divide-y divide-hairline-soft">
+                {honours.map((honour) => (
+                  <li class="flex items-start gap-3 px-5 py-3">
+                    <span
+                      class:list={[
+                        "mt-1.5 size-2.5 shrink-0 rounded-full",
+                        honour.medal ? medalDot[honour.medal] : "bg-hairline",
+                      ]}
+                      aria-hidden="true"
+                    />
+                    <span class="text-[14px] leading-5 text-ink">
+                      {honour.title}
+                      {(honour.count ?? 1) > 1 && (
+                        <span class="text-mute"> · {honour.count} times</span>
+                      )}
+                      {honour.partner && (
+                        <span class="block text-[12px] leading-4 text-mute">
+                          with {honour.partner}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )
+        }
       </aside>
     </div>
   </div>

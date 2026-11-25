@@ -1,8 +1,7 @@
 import { getAdminClient, isNotFound } from './pocketbase';
-import { periodKey, dayBounds } from './format';
+import { periodKey } from './format';
+import { medalsFrom, type MedalWin } from './members';
 import type {
-  Booking,
-  Court,
   Gear,
   Member,
   MembershipPlan,
@@ -86,6 +85,31 @@ export async function listEntriesFor(memberId: string): Promise<TournamentEntry[
     },
     [],
     'listEntriesFor',
+  );
+}
+
+/**
+ * Every member's medals, keyed by member id, for the roster. One read over the
+ * podium finishes beats a query per card.
+ */
+export async function medalsByMember(): Promise<Map<string, MedalWin[]>> {
+  return safely(
+    async () => {
+      const pb = await getAdminClient();
+      const podium = await pb.collection('tournament_entries').getFullList<TournamentEntry>({
+        filter: 'result = "winner" || result = "runner-up" || result = "semi-final"',
+        expand: 'tournament',
+        fields: 'member,result,event,expand.tournament.name',
+      });
+
+      const byMember = new Map<string, TournamentEntry[]>();
+      for (const entry of podium) {
+        byMember.set(entry.member, [...(byMember.get(entry.member) ?? []), entry]);
+      }
+      return new Map([...byMember].map(([member, entries]) => [member, medalsFrom(entries)]));
+    },
+    new Map(),
+    'medalsByMember',
   );
 }
 
@@ -188,51 +212,6 @@ export async function tournamentSummaries(): Promise<
   );
 }
 
-export async function listCourts(): Promise<Court[]> {
-  return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('courts').getFullList<Court>({ filter: 'is_active = true', sort: 'name' });
-    },
-    [],
-    'listCourts',
-  );
-}
-
-export async function listBookingsOn(date: string): Promise<Booking[]> {
-  return safely(
-    async () => {
-      const pb = await getAdminClient();
-      const day = dayBounds(date);
-      return pb.collection('bookings').getFullList<Booking>({
-        filter: pb.filter('date >= {:dayStart} && date < {:dayEnd} && status = "confirmed"', {
-          dayStart: day.start,
-          dayEnd: day.end,
-        }),
-        expand: 'court,member',
-        sort: 'start_minute',
-      });
-    },
-    [],
-    'listBookingsOn',
-  );
-}
-
-export async function listBookingsFor(memberId: string): Promise<Booking[]> {
-  return safely(
-    async () => {
-      const pb = await getAdminClient();
-      return pb.collection('bookings').getFullList<Booking>({
-        filter: pb.filter('member = {:member}', { member: memberId }),
-        expand: 'court',
-        sort: '-date,-start_minute',
-      });
-    },
-    [],
-    'listBookingsFor',
-  );
-}
-
 export async function listPlans(): Promise<MembershipPlan[]> {
   return safely(
     async () => {
@@ -283,42 +262,6 @@ export async function duesStatusFor(
   }
 }
 
-/** Club-wide numbers for the home page. Cheap enough to compute per request. */
-export async function clubStats(): Promise<{
-  members: number;
-  tournaments: number;
-  titles: number;
-}> {
-  return safely(
-    async () => {
-      const pb = await getAdminClient();
-      const [members, tournaments, titles] = await Promise.all([
-        pb.collection('members').getList(1, 1, { filter: 'status = "active"' }),
-        pb.collection('tournaments').getList(1, 1, {}),
-        pb.collection('tournament_entries').getList(1, 1, { filter: 'result = "winner"' }),
-      ]);
-      return {
-        members: members.totalItems,
-        tournaments: tournaments.totalItems,
-        titles: titles.totalItems,
-      };
-    },
-    { members: 0, tournaments: 0, titles: 0 },
-    'clubStats',
-  );
-}
-
-/* ============================================================================
-   Newsroom
-   ========================================================================== */
-
-/**
- * The feed. Every read here is filtered to `status = "published"` because these
- * helpers use the superuser client, which bypasses the collection's own rule —
- * without the filter a draft would be visible on the home page.
- *
- * Pinned stories sort first; within a pin group, newest first.
- */
 export async function listPosts(
   options: { limit?: number; category?: PostCategory; exclude?: string } = {},
 ): Promise<Post[]> {

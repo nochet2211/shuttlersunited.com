@@ -5,6 +5,34 @@ export type MemberStatus = 'active' | 'inactive' | 'pending';
 export type Handedness = 'right' | 'left';
 export type PlayStyle = 'attacking' | 'defensive' | 'all-round';
 
+export type Office =
+  | 'President'
+  | 'Vice President'
+  | 'General Secretary'
+  | 'Secretary'
+  | 'Joint Secretary'
+  | 'Treasurer'
+  | 'Finance Secretary'
+  | 'Finance Convenor'
+  | 'Finance Member'
+  | 'Executive Member';
+
+/** The highest level a member competes at, for players who represent the club. */
+export type CompetitiveLevel = 'district' | 'state' | 'national' | 'international';
+
+/**
+ * A career honour the club knows of but has no dated tournament record for,
+ * e.g. "U-19 doubles state champion". A medal, when set, counts towards the
+ * member's medals; `count` is how many times it was won (default 1).
+ */
+export interface Honour {
+  title: string;
+  /** For a doubles honour, who it was won with. */
+  partner?: string;
+  medal?: 'gold' | 'silver' | 'bronze';
+  count?: number;
+}
+
 export interface Member {
   id: string;
   phone: string;
@@ -25,6 +53,11 @@ export interface Member {
   joined_on?: string;
   city?: string;
   emergency_contact?: string;
+  /** Set for office bearers only; see OFFICES in src/lib/members.ts. */
+  office?: Office;
+  competes_at?: CompetitiveLevel;
+  /** Career honours with no tournament record behind them; see Honour. */
+  honours?: Honour[];
   is_public: boolean;
   created: string;
   updated: string;
@@ -90,7 +123,23 @@ export interface PrizeSlot {
   note?: string;
 }
 
-export type MatchEvent = 'MS' | 'WS' | 'MD' | 'WD' | 'XD';
+// MD40 / MD45 / MD60 are veterans' men's doubles (each player 40 / 45 / 60
+// or over). The 75+…105+
+// categories are combined-age doubles (the pair's ages add up to at least the
+// number), as played at the district interclub.
+export type MatchEvent =
+  | 'MS'
+  | 'WS'
+  | 'MD'
+  | 'WD'
+  | 'XD'
+  | 'MD40'
+  | 'MD45'
+  | 'MD60'
+  | '75+'
+  | '85+'
+  | '95+'
+  | '105+';
 
 export type TournamentResult =
   | 'winner'
@@ -155,34 +204,6 @@ export interface Match {
     side_a_member?: Member;
     side_b_member?: Member;
     tournament?: Tournament;
-  };
-}
-
-export interface Court {
-  id: string;
-  name: string;
-  venue: string;
-  surface?: 'wooden' | 'synthetic' | 'cement';
-  hourly_rate: number;
-  is_active: boolean;
-}
-
-export type BookingStatus = 'confirmed' | 'cancelled' | 'completed';
-
-export interface Booking {
-  id: string;
-  court: string;
-  member: string;
-  date: string;
-  /** Minutes from midnight, so slots sort and compare without timezone drift. */
-  start_minute: number;
-  end_minute: number;
-  status: BookingStatus;
-  notes?: string;
-  created: string;
-  expand?: {
-    court?: Court;
-    member?: Member;
   };
 }
 
@@ -261,6 +282,8 @@ export interface Post {
   summary: string;
   body?: string;
   cover?: string;
+  /** Files readers can download: a pamphlet, an entry form. */
+  attachments?: string[];
   /** Credited publisher for a governing-body item — "Badminton Association of India". */
   source_name?: string;
   source_url?: string;
