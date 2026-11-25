@@ -47,6 +47,10 @@ const honours = Array.isArray(member.honours) ? member.honours : [];
 const medalDot = { gold: "bg-gold", silver: "bg-silver", bronze: "bg-bronze" };
 const podium: TournamentResult[] = ["winner", "runner-up", "semi-final"];
 const accolades = entries.filter((entry) => podium.includes(entry.result));
+// Highlights pull the medals out of a longer record. When every entry is
+// already a medal, the record above shows exactly the same rows.
+const showHighlights =
+  accolades.length > 0 && accolades.length < entries.length;
 
 const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
 
@@ -193,66 +197,105 @@ const isOwnProfile = viewer?.id === member.id;
                 </p>
               </Card>
             ) : (
-              <div class="overflow-x-auto rounded-lg border border-hairline-soft bg-elevated">
-                <table class="w-full min-w-[560px] border-collapse text-left">
-                  <thead>
-                    <tr class="border-b border-hairline-soft">
-                      {["Tournament", "Event", "Partner", "Result"].map(
-                        (heading) => (
-                          <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
-                            {heading}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry) => {
-                      const tournament = entry.expand?.tournament;
-                      const partner =
-                        entry.expand?.partner?.name ?? entry.partner_name;
-                      return (
-                        <tr class="border-b border-hairline-soft last:border-0">
-                          <td class="px-4 py-3">
-                            {tournament ? (
-                              <a
-                                href={`/tournaments/${tournament.slug}`}
-                                class="text-[14px] leading-5 text-ink hover:underline"
-                              >
-                                {tournament.name}
-                              </a>
-                            ) : (
-                              <span class="text-[14px] leading-5 text-mute">
-                                —
-                              </span>
-                            )}
-                            {tournament && (
-                              <span class="block text-[12px] leading-4 text-faint">
-                                {shortDate(tournament.start_date)}
-                              </span>
-                            )}
-                          </td>
-                          <td class="px-4 py-3 text-[12px] leading-4 text-body">
-                            {entry.event}
-                          </td>
-                          <td class="px-4 py-3 text-[14px] leading-5 text-body">
-                            {partner || "—"}
-                          </td>
-                          <td class="px-4 py-3">
-                            <ResultBadge result={entry.result} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Phones: one row per entry, result beside the name. Four
+                  columns in a sideways scroller hid the partner and result. */}
+                <ul class="card flex flex-col divide-y divide-hairline-soft md:hidden">
+                  {entries.map((entry) => {
+                    const tournament = entry.expand?.tournament;
+                    const partner =
+                      entry.expand?.partner?.name ?? entry.partner_name;
+                    const details = [
+                      entry.event,
+                      partner && `with ${partner}`,
+                      tournament && shortDate(tournament.start_date),
+                    ].filter(Boolean);
+                    return (
+                      <li class="flex items-start justify-between gap-3 p-4">
+                        <div class="flex min-w-0 flex-col gap-1">
+                          {tournament ? (
+                            <a
+                              href={`/tournaments/${tournament.slug}`}
+                              class="text-[14px] font-medium leading-5 text-ink hover:underline"
+                            >
+                              {tournament.name}
+                            </a>
+                          ) : (
+                            <span class="text-[14px] leading-5 text-mute">
+                              Tournament
+                            </span>
+                          )}
+                          <span class="text-[12px] leading-4 text-mute">
+                            {details.join(" · ")}
+                          </span>
+                        </div>
+                        <ResultBadge result={entry.result} class="shrink-0" />
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <div class="hidden overflow-x-auto rounded-lg border border-hairline-soft bg-elevated md:block">
+                  <table class="w-full min-w-[560px] border-collapse text-left">
+                    <thead>
+                      <tr class="border-b border-hairline-soft">
+                        {["Tournament", "Event", "Partner", "Result"].map(
+                          (heading) => (
+                            <th class="px-4 py-3 tracking-[0.06em] text-[12px] font-medium uppercase leading-4 text-mute">
+                              {heading}
+                            </th>
+                          ),
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map((entry) => {
+                        const tournament = entry.expand?.tournament;
+                        const partner =
+                          entry.expand?.partner?.name ?? entry.partner_name;
+                        return (
+                          <tr class="border-b border-hairline-soft last:border-0">
+                            <td class="px-4 py-3">
+                              {tournament ? (
+                                <a
+                                  href={`/tournaments/${tournament.slug}`}
+                                  class="text-[14px] leading-5 text-ink hover:underline"
+                                >
+                                  {tournament.name}
+                                </a>
+                              ) : (
+                                <span class="text-[14px] leading-5 text-mute">
+                                  —
+                                </span>
+                              )}
+                              {tournament && (
+                                <span class="block text-[12px] leading-4 text-faint">
+                                  {shortDate(tournament.start_date)}
+                                </span>
+                              )}
+                            </td>
+                            <td class="px-4 py-3 text-[12px] leading-4 text-body">
+                              {entry.event}
+                            </td>
+                            <td class="px-4 py-3 text-[14px] leading-5 text-body">
+                              {partner || "—"}
+                            </td>
+                            <td class="px-4 py-3">
+                              <ResultBadge result={entry.result} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )
           }
         </section>
 
         {
-          accolades.length > 0 && (
+          showHighlights && (
             <section>
               <h2 class="heading-md mb-4">Highlights</h2>
               <div class="grid gap-3 sm:grid-cols-2">
