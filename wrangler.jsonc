@@ -6,13 +6,14 @@
   // node:crypto (cookie signing, OTP hashing, Razorpay signatures) and Buffer.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Served on workers.dev until the shuttlersunited.com zone is added to this
-  // account; then restore the custom domains:
-  //   "routes": [
-  //     { "pattern": "shuttlersunited.com", "custom_domain": true },
-  //     { "pattern": "www.shuttlersunited.com", "custom_domain": true }
-  //   ],
-  "workers_dev": true,
+  "routes": [
+    { "pattern": "shuttlersunited.com", "custom_domain": true },
+    { "pattern": "www.shuttlersunited.com", "custom_domain": true }
+  ],
+  // Off: the site lives only on the custom domains. Left on, every deploy
+  // would re-enable the *.workers.dev address and its preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
   // The club's data. Schema in migrations/; apply with `npm run db:migrate`.
   "d1_databases": [
     {
