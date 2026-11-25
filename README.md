@@ -111,10 +111,10 @@ Amounts are **always in paise**. Rupees exist only for display.
 
 ## Before going live
 
-- [ ] **Fill in the legal pages.** `/terms`, `/privacy`, `/refunds` and
-      `/contact` are written but every `[bracketed]` placeholder needs the club's
-      real entity name, address and contact. Razorpay checks these during
-      merchant onboarding and will reject an account without them.
+- [ ] **Legal pages.** `/terms`, `/privacy`, `/refunds` and `/contact` name
+      the club, Dimapur and admin@shuttlersunited.com. Razorpay checks these
+      during merchant onboarding and may ask for the registered entity name,
+      a postal address and a phone number, which they do not yet carry.
 - [ ] **Gupshup**: register a WhatsApp Business sender, get an OTP template
       approved, and set the four `GUPSHUP_*` variables.
 - [ ] **Razorpay**: complete KYC, then set `RAZORPAY_KEY_ID` / `_KEY_SECRET`.

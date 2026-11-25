@@ -1,17 +1,14 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import Eyebrow from "../ui/Eyebrow.astro";
-import Alert from "../ui/Alert.astro";
 
 interface Props {
   title: string;
   eyebrow: string;
   updated: string;
-  /** Razorpay checks these pages during merchant onboarding. */
-  needsReview?: boolean;
 }
 
-const { title, eyebrow, updated, needsReview = true } = Astro.props;
+const { title, eyebrow, updated } = Astro.props;
 ---
 
 <Layout title={title}>
@@ -23,17 +20,6 @@ const { title, eyebrow, updated, needsReview = true } = Astro.props;
         Last updated {updated}
       </p>
     </header>
-
-    {
-      needsReview && (
-        <Alert tone="warning" class="mt-8">
-          <strong class="font-medium">Template — needs your details.</strong>{" "}
-          Razorpay checks these pages during merchant onboarding. Replace every
-          <code class="font-mono">[bracketed]</code> placeholder with the club's
-          real entity name, address and contact before going live.
-        </Alert>
-      )
-    }
 
     <div class="prose-legal flex flex-col gap-6 py-10">
       <slot />
@@ -63,6 +49,14 @@ const { title, eyebrow, updated, needsReview = true } = Astro.props;
     gap: 6px;
     padding-left: 20px;
     list-style: disc;
+  }
+  .prose-legal :global(a) {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-legal :global(a:hover) {
+    color: var(--color-link-deep);
   }
   .prose-legal :global(code) {
     font-family: var(--font-mono);
