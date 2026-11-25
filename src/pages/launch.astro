@@ -1,0 +1,412 @@
+---
+/**
+ * TEMPORARY — the website's unveiling at the interclub opening ceremony.
+ * Delete this file once the site is launched; nothing else links to it.
+ *
+ * Shown full screen on the hall's projector. The chief guest presses Unveil
+ * (or a clicker sends Space / Enter / →), the hall counts down, the curtains
+ * part on the live home page already loaded behind them, and the browser then
+ * moves to the home page for real.
+ *
+ *   /launch                 3-second countdown
+ *   /launch?countdown=10    a longer one for the crowd; 0 skips it
+ */
+import "../styles/global.css";
+
+const requested = Number(Astro.url.searchParams.get("countdown") ?? 3);
+const countdown = Number.isFinite(requested)
+  ? Math.min(Math.max(Math.round(requested), 0), 10)
+  : 3;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>Shuttlers United · Unveiling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600&display=swap"
+    />
+  </head>
+
+  <body class="stage" data-countdown={countdown}>
+    {
+      /* The live site, loaded behind the curtains so the reveal shows the real thing. */
+    }
+    <iframe
+      src="/"
+      title="Shuttlers United home page"
+      tabindex="-1"
+      aria-hidden="true"></iframe>
+
+    <div class="curtain curtain-left" aria-hidden="true"></div>
+    <div class="curtain curtain-right" aria-hidden="true"></div>
+
+    <main class="emblem">
+      <img src="/logo.png" alt="" width="256" height="256" class="crest" />
+      <p class="eyebrow-line">Shuttlers United · Dimapur</p>
+      <h1 class="domain">shuttlersunited<span>.com</span></h1>
+      <p class="tagline">Our club, online. Unveiled today.</p>
+      <button type="button" class="unveil">Unveil</button>
+    </main>
+
+    <div class="count" aria-live="assertive"></div>
+    <canvas class="confetti" aria-hidden="true"></canvas>
+
+    <button type="button" class="fullscreen" aria-label="Enter full screen">
+      Full screen
+    </button>
+  </body>
+</html>
+
+<style>
+  .stage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+
+  /* Velvet: soft vertical folds in deep navy and indigo, lit from the centre. */
+  .curtain {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50.5%;
+    z-index: 2;
+    background:
+      radial-gradient(
+        ellipse at 50% 0%,
+        color-mix(in oklab, var(--su-primary) 28%, transparent),
+        transparent 60%
+      ),
+      repeating-linear-gradient(
+        90deg,
+        #0b1024 0px,
+        #141a3d 28px,
+        #1c1f52 46px,
+        #11163a 70px,
+        #0b1024 96px
+      );
+    box-shadow: inset 0 -120px 160px -40px rgb(0 0 0 / 0.6);
+    transition: transform 1.8s cubic-bezier(0.7, 0, 0.2, 1);
+  }
+  .curtain-left {
+    left: 0;
+    border-right: 2px solid color-mix(in oklab, var(--su-primary) 50%, #0b1024);
+  }
+  .curtain-right {
+    right: 0;
+    border-left: 2px solid color-mix(in oklab, var(--su-primary) 50%, #0b1024);
+  }
+  .open .curtain-left {
+    transform: translateX(-102%);
+  }
+  .open .curtain-right {
+    transform: translateX(102%);
+  }
+
+  .emblem {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    transition:
+      opacity 0.6s ease,
+      transform 0.8s cubic-bezier(0.5, 0, 0.2, 1);
+  }
+  /* The numbers take the stage; the crest stays faintly behind them. */
+  .counting .emblem {
+    opacity: 0.12;
+  }
+  .open .emblem {
+    opacity: 0;
+    transform: translateY(-40px) scale(1.08);
+  }
+
+  .crest {
+    width: clamp(120px, 18vmin, 200px);
+    height: auto;
+    border-radius: 9999px;
+    box-shadow:
+      0 0 0 6px rgb(255 255 255 / 0.06),
+      0 0 80px color-mix(in oklab, var(--su-primary) 55%, transparent);
+    margin-bottom: 12px;
+    animation: breathe 3.2s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% {
+      box-shadow:
+        0 0 0 10px rgb(255 255 255 / 0.04),
+        0 0 120px color-mix(in oklab, var(--su-primary) 70%, transparent);
+    }
+  }
+
+  .eyebrow-line {
+    font-size: clamp(12px, 1.6vmin, 16px);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+  .domain {
+    font-family: var(--font-crest);
+    font-weight: 600;
+    font-size: clamp(36px, 8vmin, 96px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .domain span {
+    color: var(--color-mute);
+  }
+  .tagline {
+    font-size: clamp(16px, 2.4vmin, 24px);
+    color: var(--color-body);
+  }
+
+  .unveil {
+    margin-top: 28px;
+    padding: 18px 56px;
+    border-radius: 9999px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: clamp(18px, 2.6vmin, 26px);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 10px 40px
+      color-mix(in oklab, var(--su-primary) 45%, transparent);
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .unveil:hover {
+    background: var(--color-primary-deep);
+    transform: translateY(-2px);
+  }
+
+  .count {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    font-family: var(--font-crest);
+    font-weight: 600;
+    font-size: clamp(120px, 34vmin, 380px);
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 0 80px
+      color-mix(in oklab, var(--su-primary) 70%, transparent);
+  }
+  .count.tick {
+    animation: tick 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes tick {
+    from {
+      opacity: 0;
+      transform: scale(1.6);
+    }
+    25% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+  }
+
+  .confetti {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .fullscreen {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 6;
+    padding: 8px 14px;
+    border-radius: 9999px;
+    font-size: 13px;
+    color: var(--color-mute);
+    background: rgb(255 255 255 / 0.06);
+    cursor: pointer;
+  }
+  .fullscreen:hover {
+    color: var(--color-ink);
+  }
+  .counting .fullscreen,
+  :fullscreen .fullscreen {
+    display: none;
+  }
+</style>
+
+<script>
+  const body = document.body;
+  const unveil = document.querySelector<HTMLButtonElement>(".unveil")!;
+  const count = document.querySelector<HTMLDivElement>(".count")!;
+  const canvas = document.querySelector<HTMLCanvasElement>(".confetti")!;
+  const fullscreen = document.querySelector<HTMLButtonElement>(".fullscreen")!;
+
+  const countdown = Number(body.dataset.countdown ?? 3);
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+  let started = false;
+
+  async function run() {
+    if (started) return;
+    started = true;
+    body.classList.add("counting");
+
+    for (let n = countdown; n > 0; n--) {
+      count.textContent = String(n);
+      count.classList.remove("tick");
+      void count.offsetWidth; // restart the animation for each number
+      count.classList.add("tick");
+      await wait(1000);
+    }
+    count.textContent = "";
+
+    body.classList.add("open");
+    confetti(reduceMotion ? 0 : 5200);
+    await wait(reduceMotion ? 600 : 4200);
+
+    location.replace("/");
+  }
+
+  unveil.addEventListener("click", run);
+  // A presentation clicker sends one of these.
+  addEventListener("keydown", (event) => {
+    if ([" ", "Enter", "ArrowRight", "PageDown"].includes(event.key)) {
+      event.preventDefault();
+      run();
+    }
+  });
+
+  fullscreen.addEventListener("click", () => {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  });
+
+  /* Shuttlecocks and paper confetti, falling from above the screen. */
+  function confetti(duration: number) {
+    if (!duration) return;
+    const ctx = canvas.getContext("2d")!;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const resize = () => {
+      canvas.width = innerWidth * dpr;
+      canvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    addEventListener("resize", resize);
+
+    const styles = getComputedStyle(document.documentElement);
+    const colours = [
+      styles.getPropertyValue("--su-primary"),
+      "#ffffff",
+      "#f5c542",
+      "#7dd3fc",
+      "#f9a8d4",
+      "#86efac",
+    ].map((colour) => colour.trim() || "#ffffff");
+
+    const count = Math.round(Math.min(innerWidth, 1600) / 8);
+    const pieces = Array.from({ length: count }, (_, i) => ({
+      x: Math.random() * innerWidth,
+      y: -20 - Math.random() * innerHeight * 0.8,
+      vy: 2 + Math.random() * 3.5,
+      vx: -1 + Math.random() * 2,
+      angle: Math.random() * Math.PI * 2,
+      spin: -0.08 + Math.random() * 0.16,
+      size: 6 + Math.random() * 8,
+      colour: colours[i % colours.length],
+      shuttle: i % 7 === 0,
+    }));
+
+    const drawShuttle = (size: number) => {
+      // Feather skirt, then the cork.
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.45, -size);
+      ctx.lineTo(size * 0.45, -size);
+      ctx.lineTo(size * 0.2, size * 0.3);
+      ctx.lineTo(-size * 0.2, size * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.18)";
+      ctx.lineWidth = 1;
+      for (const x of [-0.22, 0, 0.22]) {
+        ctx.beginPath();
+        ctx.moveTo(x * size * 2, -size);
+        ctx.lineTo(x * size * 0.9, size * 0.3);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#f5c542";
+      ctx.beginPath();
+      ctx.arc(0, size * 0.45, size * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    const end = performance.now() + duration;
+    const frame = (now: number) => {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      for (const piece of pieces) {
+        piece.y += piece.vy;
+        piece.x += piece.vx + Math.sin(piece.y / 40) * 0.6;
+        piece.angle += piece.spin;
+        if (piece.y > innerHeight + 30 && now < end - 1500) {
+          piece.y = -20;
+          piece.x = Math.random() * innerWidth;
+        }
+        ctx.save();
+        ctx.translate(piece.x, piece.y);
+        ctx.rotate(piece.shuttle ? Math.sin(piece.angle) * 0.5 : piece.angle);
+        if (piece.shuttle) {
+          drawShuttle(piece.size * 1.6);
+        } else {
+          ctx.fillStyle = piece.colour;
+          ctx.fillRect(
+            -piece.size / 2,
+            -piece.size / 4,
+            piece.size,
+            piece.size / 2,
+          );
+        }
+        ctx.restore();
+      }
+      if (now < end) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+</script>
