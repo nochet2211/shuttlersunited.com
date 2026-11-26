@@ -68,7 +68,7 @@ const played =
             <a
               href={`/members/${side.slug}`}
               class:list={[
-                "min-w-0 flex-1 truncate text-[14px] leading-5 hover:underline",
+                "min-w-0 flex-1 text-[14px] leading-5 [overflow-wrap:anywhere] hover:underline",
                 isWinner
                   ? "font-medium text-ink"
                   : isLoser
@@ -81,7 +81,7 @@ const played =
           ) : (
             <span
               class:list={[
-                "min-w-0 flex-1 truncate text-[14px] leading-5",
+                "min-w-0 flex-1 text-[14px] leading-5 [overflow-wrap:anywhere]",
                 isWinner
                   ? "font-medium text-ink"
                   : isLoser
