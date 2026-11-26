@@ -37,6 +37,10 @@ const sides = [
   },
 ];
 
+// The seed column only takes space in a match where someone is seeded, so an
+// unseeded draw isn't indented behind an empty gutter.
+const seeded = sides.some((side) => side.seed);
+
 const played =
   match.status === "completed" ||
   match.status === "walkover" ||
@@ -56,12 +60,10 @@ const played =
             isWinner && "bg-soft",
           ]}
         >
-          {side.seed ? (
+          {seeded && (
             <span class="w-5 shrink-0 text-[12px] leading-4 text-faint">
-              {side.seed}
+              {side.seed || ""}
             </span>
-          ) : (
-            <span class="w-5 shrink-0" />
           )}
 
           {side.slug && side.isPublic ? (
