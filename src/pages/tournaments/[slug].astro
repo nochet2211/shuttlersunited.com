@@ -14,11 +14,12 @@ import {
   listEntriesForTournament,
   listMatchesForTournament,
 } from "../../lib/queries";
-import { capitalize, shortDate } from "../../lib/format";
+import { capitalize } from "../../lib/format";
 import {
   EVENT_NAMES,
   EVENT_ORDER,
   buildBracket,
+  tournamentDates,
   groupsFor,
   standingsFor,
   winnerOf,
@@ -153,11 +154,7 @@ const resultBlocks = eventBlocks.filter(
   (block) => block.bracket.length > 0 || block.standings.length > 0,
 );
 
-const dateRange =
-  tournament.end_date &&
-  tournament.end_date.slice(0, 10) !== tournament.start_date.slice(0, 10)
-    ? `${shortDate(tournament.start_date)} – ${shortDate(tournament.end_date)}`
-    : shortDate(tournament.start_date);
+const dateRange = tournamentDates(tournament);
 
 const subtitle = [dateRange, tournament.venue, tournament.city]
   .filter(Boolean)

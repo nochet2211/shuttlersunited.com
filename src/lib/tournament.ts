@@ -1,8 +1,10 @@
+import { shortDate } from './format';
 import type {
   GameScore,
   Match,
   MatchEvent,
   MatchRound,
+  Tournament,
   TournamentEntry,
   TournamentResult,
 } from './types';
@@ -74,6 +76,27 @@ export const RESULT_LABELS: Record<TournamentResult, string> = {
 };
 
 const roundIndex = (round: MatchRound) => ROUND_ORDER.indexOf(round);
+
+// --- dates -------------------------------------------------------------------
+
+type Dated = Pick<Tournament, 'start_date' | 'end_date' | 'date_label'>;
+
+/**
+ * When a tournament was played, as shown: "27 Nov 2026 – 28 Nov 2026", or the
+ * day alone for a one-day event. A tournament whose days aren't known carries
+ * a `date_label` ("2023") that stands in for both.
+ */
+export function tournamentDates(tournament: Dated): string {
+  if (tournament.date_label) return tournament.date_label;
+  return tournament.end_date &&
+    tournament.end_date.slice(0, 10) !== tournament.start_date.slice(0, 10)
+    ? `${shortDate(tournament.start_date)} – ${shortDate(tournament.end_date)}`
+    : shortDate(tournament.start_date);
+}
+
+/** The start day alone, for a one-line mention such as a profile's record. */
+export const tournamentDay = (tournament: Dated) =>
+  tournament.date_label || shortDate(tournament.start_date);
 
 // --- scores ------------------------------------------------------------------
 

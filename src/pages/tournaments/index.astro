@@ -5,7 +5,8 @@ import ResultBadge from "../../components/tournament/ResultBadge.astro";
 import Eyebrow from "../../components/ui/Eyebrow.astro";
 import Empty from "../../components/ui/Empty.astro";
 import { listTournaments, tournamentSummaries } from "../../lib/queries";
-import { capitalize, money, shortDate } from "../../lib/format";
+import { capitalize, money } from "../../lib/format";
+import { tournamentDates } from "../../lib/tournament";
 import type { Tournament } from "../../lib/types";
 
 const [all, summaries] = await Promise.all([
@@ -22,11 +23,7 @@ const past = all
   .filter((event) => event.status === "completed")
   .sort((a, b) => b.start_date.localeCompare(a.start_date));
 
-const dateRange = (event: Tournament) =>
-  event.end_date &&
-  event.end_date.slice(0, 10) !== event.start_date.slice(0, 10)
-    ? `${shortDate(event.start_date)} – ${shortDate(event.end_date)}`
-    : shortDate(event.start_date);
+const dateRange = (event: Tournament) => tournamentDates(event);
 
 // A tier column only earns its place once the calendar actually varies.
 const levelTone = (level: Tournament["level"]) =>

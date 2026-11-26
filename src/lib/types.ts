@@ -102,6 +102,8 @@ export interface Tournament {
   city?: string;
   start_date: string;
   end_date?: string;
+  /** Shown instead of the dates when the exact days aren't known, e.g. "2023". */
+  date_label?: string;
   level: TournamentLevel;
   status: TournamentStatus;
   registration_deadline?: string;

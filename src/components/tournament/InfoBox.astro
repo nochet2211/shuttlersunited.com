@@ -6,6 +6,7 @@
  */
 import Badge from "../ui/Badge.astro";
 import { capitalize, money, shortDate } from "../../lib/format";
+import { tournamentDates } from "../../lib/tournament";
 import type { Tournament } from "../../lib/types";
 
 interface Props {
@@ -16,11 +17,7 @@ interface Props {
 
 const { tournament, entryCount, matchCount } = Astro.props;
 
-const dateRange =
-  tournament.end_date &&
-  tournament.end_date.slice(0, 10) !== tournament.start_date.slice(0, 10)
-    ? `${shortDate(tournament.start_date)} – ${shortDate(tournament.end_date)}`
-    : shortDate(tournament.start_date);
+const dateRange = tournamentDates(tournament);
 
 const rows = [
   { label: "Series", value: tournament.organizer },
