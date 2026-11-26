@@ -22,6 +22,7 @@ const sides = [
   {
     key: "a" as const,
     name: match.side_a_name,
+    club: match.side_a_club,
     seed: match.side_a_seed,
     slug: match.expand?.side_a_member?.slug,
     isPublic: match.expand?.side_a_member?.is_public,
@@ -30,6 +31,7 @@ const sides = [
   {
     key: "b" as const,
     name: match.side_b_name,
+    club: match.side_b_club,
     seed: match.side_b_seed,
     slug: match.expand?.side_b_member?.slug,
     isPublic: match.expand?.side_b_member?.is_public,
@@ -66,34 +68,39 @@ const played =
             </span>
           )}
 
-          {side.slug && side.isPublic ? (
-            <a
-              href={`/members/${side.slug}`}
-              class:list={[
-                "min-w-0 flex-1 text-[14px] leading-5 [overflow-wrap:anywhere] hover:underline",
-                isWinner
-                  ? "font-medium text-ink"
-                  : isLoser
-                    ? "text-mute"
-                    : "text-body",
-              ]}
-            >
-              {side.name}
-            </a>
-          ) : (
-            <span
-              class:list={[
-                "min-w-0 flex-1 text-[14px] leading-5 [overflow-wrap:anywhere]",
-                isWinner
-                  ? "font-medium text-ink"
-                  : isLoser
-                    ? "text-mute"
-                    : "text-body",
-              ]}
-            >
-              {side.name}
-            </span>
-          )}
+          <div class="flex min-w-0 flex-1 flex-col">
+            {side.slug && side.isPublic ? (
+              <a
+                href={`/members/${side.slug}`}
+                class:list={[
+                  "text-[14px] leading-5 [overflow-wrap:anywhere] hover:underline",
+                  isWinner
+                    ? "font-medium text-ink"
+                    : isLoser
+                      ? "text-mute"
+                      : "text-body",
+                ]}
+              >
+                {side.name}
+              </a>
+            ) : (
+              <span
+                class:list={[
+                  "text-[14px] leading-5 [overflow-wrap:anywhere]",
+                  isWinner
+                    ? "font-medium text-ink"
+                    : isLoser
+                      ? "text-mute"
+                      : "text-body",
+                ]}
+              >
+                {side.name}
+              </span>
+            )}
+            {side.club && (
+              <span class="text-[12px] leading-4 text-faint">{side.club}</span>
+            )}
+          </div>
 
           {played && (
             <span

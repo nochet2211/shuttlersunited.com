@@ -189,9 +189,12 @@ export interface Match {
   slot: number;
   group_name?: string;
   side_a_name: string;
+  /** The club this side plays for, in an interclub draw. */
+  side_a_club?: string;
   side_a_member?: string;
   side_a_seed?: number;
   side_b_name: string;
+  side_b_club?: string;
   side_b_member?: string;
   side_b_seed?: number;
   scores?: GameScore[];
