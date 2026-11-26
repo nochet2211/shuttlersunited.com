@@ -18,6 +18,8 @@ interface Props extends Omit<HTMLAttributes<"a">, "type"> {
   size?: "sm" | "md" | "lg";
   href?: string;
   type?: "button" | "submit" | "reset";
+  /** Submit to a different action than the surrounding form's. */
+  formaction?: string;
   disabled?: boolean;
   full?: boolean;
 }

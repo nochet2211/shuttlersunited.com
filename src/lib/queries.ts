@@ -2,6 +2,7 @@ import { all, expand, first } from './db';
 import { periodKey } from './format';
 import { medalsFrom, type MedalWin } from './members';
 import type {
+  GalleryPhoto,
   Gear,
   Member,
   MembershipPlan,
@@ -375,5 +376,18 @@ export async function recentResults(limit = 4): Promise<TournamentEntry[]> {
     },
     [],
     'recentResults',
+  );
+}
+
+/* ============================================================================
+   Gallery
+   ========================================================================== */
+
+/** Every club photo, newest first. */
+export async function listGallery(): Promise<GalleryPhoto[]> {
+  return safely(
+    () => all<GalleryPhoto>('gallery', 'SELECT * FROM gallery ORDER BY created DESC'),
+    [],
+    'listGallery',
   );
 }

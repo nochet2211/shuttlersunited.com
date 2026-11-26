@@ -1,0 +1,178 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import Card from "../../components/ui/Card.astro";
+import Alert from "../../components/ui/Alert.astro";
+import Button from "../../components/ui/Button.astro";
+import Empty from "../../components/ui/Empty.astro";
+import { actions } from "astro:actions";
+import { listGallery } from "../../lib/queries";
+import { galleryImage } from "../../lib/files";
+import { actionMessage } from "../../lib/action-error";
+
+const addResult = Astro.getActionResult(actions.gallery.addPhoto);
+const updateResult = Astro.getActionResult(actions.gallery.updatePhoto);
+const removeResult = Astro.getActionResult(actions.gallery.removePhoto);
+
+// Back to a clean GET after a successful upload, so a refresh can't post the
+// same photo twice.
+if (addResult && !addResult.error) {
+  return Astro.redirect("/admin/gallery");
+}
+
+const error =
+  actionMessage(addResult?.error) ??
+  actionMessage(updateResult?.error) ??
+  actionMessage(removeResult?.error);
+
+const photos = await listGallery();
+
+const inputClass =
+  "w-full rounded-md border border-hairline bg-elevated px-3 text-[16px] leading-[1.5] tracking-[-0.05px] text-ink placeholder:text-faint focus:outline-2 focus:outline-offset-0 focus:outline-focus/50";
+const lineClass = `${inputClass} h-10 pointer-coarse:h-11`;
+const labelClass = "label-sm text-body";
+---
+
+<AppLayout
+  section="admin"
+  title="Gallery"
+  eyebrow="Club administration"
+  heading="Gallery"
+  description={`${photos.length} ${photos.length === 1 ? "photo" : "photos"} on /gallery. The newest shows first.`}
+>
+  <div class="flex flex-col gap-5">
+    {error && <Alert>{error}</Alert>}
+
+    <Card padding="lg">
+      <form
+        method="POST"
+        enctype="multipart/form-data"
+        action={actions.gallery.addPhoto}
+        class="flex flex-col gap-4"
+      >
+        <h2 class="heading-md">Add a photo</h2>
+        <div class="flex flex-col gap-1.5">
+          <label for="photo" class={labelClass}
+            >Photo <span class="text-error">*</span></label
+          >
+          <input
+            id="photo"
+            name="photo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            required
+            class="text-[14px] text-body file:mr-3 file:rounded-full file:border file:border-hairline file:bg-elevated file:px-4 file:py-2 file:text-[14px] file:text-ink"
+          />
+          <span class="text-[12px] leading-4 text-mute"
+            >JPEG, PNG or WebP, up to 10 MB.</span
+          >
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label for="caption" class={labelClass}>Caption</label>
+          <input
+            id="caption"
+            name="caption"
+            maxlength="300"
+            placeholder="Courts going down at Livingstone Foundation College"
+            class={lineClass}
+          />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label for="credit" class={labelClass}>Photo credit</label>
+          <input
+            id="credit"
+            name="credit"
+            maxlength="120"
+            placeholder="Leave blank for the club's own photos"
+            class={lineClass}
+          />
+        </div>
+        <div>
+          <Button type="submit">Add to gallery</Button>
+        </div>
+      </form>
+    </Card>
+
+    {
+      photos.length === 0 ? (
+        <Empty title="No photos yet">
+          Photos you add here appear on the public gallery straight away.
+        </Empty>
+      ) : (
+        <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {photos.map((photo) => (
+            <li class="card flex flex-col overflow-hidden">
+              <a
+                href={`/gallery/${photo.id}`}
+                class="block aspect-[4/3] bg-soft"
+              >
+                <img
+                  src={galleryImage(photo, "600x450")}
+                  alt={photo.caption || "Club photo"}
+                  loading="lazy"
+                  class="h-full w-full object-cover"
+                />
+              </a>
+              <form
+                method="POST"
+                action={actions.gallery.updatePhoto}
+                class="flex flex-col gap-2 p-4"
+              >
+                <input type="hidden" name="id" value={photo.id} />
+                <label class="sr-only" for={`caption-${photo.id}`}>
+                  Caption
+                </label>
+                <input
+                  id={`caption-${photo.id}`}
+                  name="caption"
+                  maxlength="300"
+                  value={photo.caption}
+                  placeholder="Caption"
+                  class={lineClass}
+                />
+                <label class="sr-only" for={`credit-${photo.id}`}>
+                  Photo credit
+                </label>
+                <input
+                  id={`credit-${photo.id}`}
+                  name="credit"
+                  maxlength="120"
+                  value={photo.credit}
+                  placeholder="Photo credit"
+                  class={lineClass}
+                />
+                <div class="flex items-center justify-between gap-2 pt-1">
+                  <Button type="submit" variant="secondary" size="sm">
+                    Save
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="sm"
+                    formaction={actions.gallery.removePhoto}
+                    data-confirm
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </div>
+</AppLayout>
+
+<script>
+  // Deleting a photo removes the file too. Progressive enhancement only — the
+  // action itself is the guard.
+  for (const button of document.querySelectorAll<HTMLButtonElement>(
+    "button[data-confirm]",
+  )) {
+    button.addEventListener("click", (event) => {
+      if (!window.confirm("Delete this photo? This cannot be undone.")) {
+        event.preventDefault();
+      }
+    });
+  }
+</script>

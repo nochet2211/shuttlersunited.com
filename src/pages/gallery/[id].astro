@@ -1,0 +1,76 @@
+---
+/**
+ * One gallery photo on its own page: the address the viewer on /gallery shows
+ * while a photo is open, so a shared or reloaded link still lands on it.
+ */
+import Layout from "../../layouts/Layout.astro";
+import { listGallery } from "../../lib/queries";
+import { galleryImage } from "../../lib/files";
+import { fullSize } from "../../lib/gallery";
+
+const photos = await listGallery();
+const index = photos.findIndex((photo) => photo.id === Astro.params.id);
+
+if (index === -1) {
+  return new Response(null, { status: 404, statusText: "Not found" });
+}
+
+const photo = photos[index];
+const previous = photos[(index - 1 + photos.length) % photos.length];
+const next = photos[(index + 1) % photos.length];
+
+const linkClass =
+  "inline-flex items-center gap-1.5 text-[14px] font-medium leading-5 text-link hover:text-link-deep";
+---
+
+<Layout
+  title={photo.caption ? photo.caption.slice(0, 60) : "Gallery"}
+  description={photo.caption || "A photo from Shuttlers United, Dimapur."}
+>
+  <div class="shell max-w-[960px] py-8">
+    <a href="/gallery" class={linkClass}>← Gallery</a>
+
+    <figure class="mt-6 flex flex-col gap-4">
+      <img
+        src={galleryImage(photo, fullSize(photo))}
+        alt={photo.caption || "Club photo"}
+        class="card mx-auto max-h-[78vh] w-auto max-w-full object-contain"
+      />
+      {
+        (photo.caption || photo.credit) && (
+          <figcaption class="flex flex-col gap-1 text-center">
+            {photo.caption && (
+              <span class="text-[16px] leading-[1.5] text-ink">
+                {photo.caption}
+              </span>
+            )}
+            {photo.credit && (
+              <span class="text-[12px] leading-4 text-mute">
+                Photo: {photo.credit}
+              </span>
+            )}
+          </figcaption>
+        )
+      }
+    </figure>
+
+    {
+      photos.length > 1 && (
+        <nav
+          class="mt-8 flex items-center justify-between border-t border-hairline-soft pt-5"
+          aria-label="More photos"
+        >
+          <a href={`/gallery/${previous.id}`} class={linkClass}>
+            ← Previous
+          </a>
+          <span class="text-[13px] tabular-nums text-mute">
+            {index + 1} / {photos.length}
+          </span>
+          <a href={`/gallery/${next.id}`} class={linkClass}>
+            Next →
+          </a>
+        </nav>
+      )
+    }
+  </div>
+</Layout>

@@ -61,3 +61,8 @@ export async function deleteFile(
 ): Promise<void> {
   if (filename) await bucket().delete(`${collection}/${recordId}/${filename}`);
 }
+
+export const galleryImage = (
+  photo: { id: string; image: string },
+  thumb?: string,
+): string | null => fileUrl('gallery', photo.id, photo.image, thumb);

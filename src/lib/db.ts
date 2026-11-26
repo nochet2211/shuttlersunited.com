@@ -25,7 +25,8 @@ export type Table =
   | 'courts'
   | 'bookings'
   | 'membership_plans'
-  | 'payments';
+  | 'payments'
+  | 'gallery';
 
 const BOOLEAN_COLUMNS: Partial<Record<Table, string[]>> = {
   members: ['is_public'],

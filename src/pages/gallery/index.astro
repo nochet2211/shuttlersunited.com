@@ -1,0 +1,261 @@
+---
+/**
+ * The club photo wall, laid out like Instagram's explore grid: three columns
+ * of square tiles butted together, with portrait shots given a tall tile so
+ * they aren't cropped to a sliver. Each tile is a link to /gallery/<id>, which
+ * works on its own; with JS the same click opens a viewer over the grid.
+ */
+import Layout from "../../layouts/Layout.astro";
+import Eyebrow from "../../components/ui/Eyebrow.astro";
+import Empty from "../../components/ui/Empty.astro";
+import { listGallery } from "../../lib/queries";
+import { galleryImage } from "../../lib/files";
+import { isPortrait, fullSize } from "../../lib/gallery";
+
+const photos = await listGallery();
+
+// What the viewer needs, handed to the script below.
+const viewerData = photos.map((photo) => ({
+  id: photo.id,
+  src: galleryImage(photo, fullSize(photo)),
+  caption: photo.caption,
+  credit: photo.credit,
+}));
+---
+
+<Layout
+  title="Gallery"
+  description="Photos from Shuttlers United, Dimapur — club nights, tournaments and everything around them."
+>
+  <div class="shell">
+    <header class="flex flex-col gap-2 border-b border-hairline-soft pb-8">
+      <Eyebrow>Around the club</Eyebrow>
+      <h1 class="heading-lg">Gallery</h1>
+      <p class="subtitle-md max-w-xl text-body">
+        Club nights, tournaments and everything around them. Tap a photo to see
+        it in full.
+      </p>
+    </header>
+
+    <div class="py-8">
+      {
+        photos.length === 0 ? (
+          <Empty title="No photos yet">
+            Club photos appear here once an admin adds them.
+          </Empty>
+        ) : (
+          /* Phones run the grid edge to edge, the way the app does; wider screens
+             cap it near Instagram's own width so tiles stay photo-sized. */
+          <ul class="-mx-6 grid grid-flow-dense grid-cols-3 gap-0.5 md:mx-auto md:max-w-[960px]">
+            {photos.map((photo, index) => {
+              const tall = isPortrait(photo);
+              return (
+                <li class:list={[tall ? "row-span-2" : "aspect-square"]}>
+                  <a
+                    href={`/gallery/${photo.id}`}
+                    data-index={index}
+                    class="group relative block h-full w-full overflow-hidden bg-soft focus-visible:outline-offset-[-2px]"
+                  >
+                    <img
+                      src={galleryImage(photo, tall ? "600x1200" : "600x600")}
+                      alt={photo.caption || "Club photo"}
+                      loading={index < 6 ? "eager" : "lazy"}
+                      decoding="async"
+                      class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                    {photo.caption && (
+                      <span class="pointer-events-none absolute inset-0 hidden items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 text-[13px] leading-[1.35] text-white opacity-0 transition-opacity group-hover:opacity-100 md:flex">
+                        <span class="line-clamp-3">{photo.caption}</span>
+                      </span>
+                    )}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      }
+    </div>
+  </div>
+
+  {/* ------------------------------------------------------------ viewer */}
+  <dialog
+    class="viewer m-0 h-dvh max-h-none w-screen max-w-none bg-black p-0 text-white backdrop:bg-black/80"
+    aria-label="Photo viewer"
+  >
+    <div class="flex h-full flex-col">
+      <div class="flex items-center justify-between gap-4 px-4 py-3">
+        <span class="viewer-count text-[13px] tabular-nums text-white/70"
+        ></span>
+        <button
+          type="button"
+          class="viewer-close grid size-11 place-items-center rounded-full text-white/80 hover:bg-white/10 hover:text-white"
+          aria-label="Close"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg
+          >
+        </button>
+      </div>
+
+      <div
+        class="viewer-stage relative flex min-h-0 flex-1 items-center justify-center"
+      >
+        <img class="viewer-image max-h-full max-w-full object-contain" alt="" />
+        <button
+          type="button"
+          class="viewer-prev absolute left-2 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white/90 hover:bg-black/60 max-sm:hidden"
+          aria-label="Previous photo"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg
+          >
+        </button>
+        <button
+          type="button"
+          class="viewer-next absolute right-2 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white/90 hover:bg-black/60 max-sm:hidden"
+          aria-label="Next photo"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg
+          >
+        </button>
+      </div>
+
+      <div class="mx-auto w-full max-w-2xl px-5 pb-6 pt-4 text-center">
+        <p class="viewer-caption text-[15px] leading-[1.5] text-white"></p>
+        <p class="viewer-credit mt-1 text-[12px] leading-4 text-white/60"></p>
+      </div>
+    </div>
+  </dialog>
+
+  <script
+    type="application/json"
+    id="gallery-data"
+    set:html={JSON.stringify(viewerData)}
+  />
+</Layout>
+
+<script>
+  interface Photo {
+    id: string;
+    src: string;
+    caption: string;
+    credit: string;
+  }
+
+  const photos: Photo[] = JSON.parse(
+    document.getElementById("gallery-data")?.textContent ?? "[]",
+  );
+  const viewer = document.querySelector<HTMLDialogElement>(".viewer")!;
+  const image = viewer.querySelector<HTMLImageElement>(".viewer-image")!;
+  const caption = viewer.querySelector<HTMLElement>(".viewer-caption")!;
+  const credit = viewer.querySelector<HTMLElement>(".viewer-credit")!;
+  const count = viewer.querySelector<HTMLElement>(".viewer-count")!;
+
+  let current = 0;
+
+  function show(index: number) {
+    current = (index + photos.length) % photos.length;
+    const photo = photos[current];
+    image.src = photo.src;
+    image.alt = photo.caption || "Club photo";
+    caption.textContent = photo.caption;
+    credit.textContent = photo.credit ? `Photo: ${photo.credit}` : "";
+    count.textContent = `${current + 1} / ${photos.length}`;
+    // Each photo has its own address, so the one on screen can be shared.
+    history.replaceState({ gallery: true }, "", `/gallery/${photo.id}`);
+    // Warm the neighbours so stepping through doesn't wait on the network.
+    for (const step of [1, -1]) {
+      const next = photos[(current + step + photos.length) % photos.length];
+      new Image().src = next.src;
+    }
+  }
+
+  function open(index: number) {
+    // One history entry for the whole viewing, so Back closes the viewer.
+    history.pushState({ gallery: true }, "", location.href);
+    show(index);
+    viewer.showModal();
+  }
+
+  function close() {
+    if (!viewer.open) return;
+    viewer.close();
+    history.replaceState(null, "", "/gallery");
+  }
+
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(
+    "a[data-index]",
+  )) {
+    link.addEventListener("click", (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+      event.preventDefault();
+      open(Number(link.dataset.index));
+    });
+  }
+
+  viewer
+    .querySelector(".viewer-close")!
+    .addEventListener("click", () => history.back());
+  viewer
+    .querySelector(".viewer-prev")!
+    .addEventListener("click", () => show(current - 1));
+  viewer
+    .querySelector(".viewer-next")!
+    .addEventListener("click", () => show(current + 1));
+
+  // A click on the dark surround (not the photo or its controls) closes.
+  viewer.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target === viewer || target.classList.contains("viewer-stage"))
+      history.back();
+  });
+
+  // Escape closes the dialog natively; keep the address in step.
+  viewer.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    history.back();
+  });
+  addEventListener("popstate", close);
+
+  addEventListener("keydown", (event) => {
+    if (!viewer.open) return;
+    if (event.key === "ArrowRight") show(current + 1);
+    if (event.key === "ArrowLeft") show(current - 1);
+  });
+
+  // Swipe between photos on a phone.
+  let touchX: number | null = null;
+  viewer.addEventListener(
+    "touchstart",
+    (event) => (touchX = event.touches[0].clientX),
+    { passive: true },
+  );
+  viewer.addEventListener("touchend", (event) => {
+    if (touchX === null) return;
+    const dx = event.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 50) show(current + (dx < 0 ? 1 : -1));
+  });
+</script>

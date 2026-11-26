@@ -300,3 +300,17 @@ export interface Post {
     author?: Member;
   };
 }
+
+/** A club photo on /gallery. */
+export interface GalleryPhoto {
+  id: string;
+  image: string;
+  caption: string;
+  /** Who took it, when it isn't the club's own. */
+  credit: string;
+  /** Pixels of the original; 0 when unknown. */
+  width: number;
+  height: number;
+  created: string;
+  updated: string;
+}
